@@ -1,0 +1,43 @@
+# Example configuration for the LED Display Controller.
+# Copy to config.yaml and adjust paths/pins for your setup.
+
+mqtt:
+  host: localhost
+  port: 1883
+
+relay:
+  backend: mock  # "gpio" on the Pi, "mock" for local development
+  # BCM numbering. GPIO0 (physical pin 27, the HAT ID EEPROM pin) is not claimed by any
+  # of the 3 parallel chains in rpi-rgb-led-matrix's "regular" mapping, which Adafruit's
+  # RGB Matrix Bonnets use — GPIO2-27 are all matrix signals on chain 1, 2, or 3, even for
+  # chains you haven't physically populated. Verify against your specific bonnet/HAT.
+  pin: 0
+
+process_terminate_timeout: 5.0  # seconds to wait for SIGTERM before SIGKILL
+
+# System animations: run like any other program, but not user-selectable.
+system:
+  idle: python3 programs/idle.py
+  transition: python3 programs/transition.py
+  shutdown: python3 programs/shutdown.py
+
+programs:
+
+  weather:
+    name: Weather
+    command: python3 programs/weather.py
+
+  clock:
+    name: Clock
+    command: python3 programs/clock.py
+
+  trainboard:
+    name: Train Board
+    command: python3 programs/trainboard.py --station {subprogram}
+    subprograms:
+      berlin:
+        name: Berlin Hbf
+      hamburg:
+        name: Hamburg Hbf
+      paderborn:
+        name: Paderborn Hbf
