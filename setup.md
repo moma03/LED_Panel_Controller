@@ -12,18 +12,10 @@ Single source of truth · configuration-driven · language-independent · fail-s
 
 ## Architecture
 
-```
-Home Assistant
-       │ MQTT
-┌──────────────────────────────┐
-│      Display Controller      │
-│  State Machine · Process Mgr │
-│  Config Loader · MQTT I/F    │
-│  Relay Controller · Transition Mgr │
-└──────────────┬───────────────┘
-               │ executes commands
-    ┌──────────┴──────────┐
-    │  Python / Native binaries / Shell / Rust / Go / C / C++
+```mermaid
+flowchart LR
+    HA[Home Assistant] -->|MQTT| DC[Display Controller]
+    DC -->|executes commands| APP[External Programs]
 ```
 
 The controller doesn't care how a program is implemented — every application runs as a plain configured command.
@@ -60,14 +52,21 @@ Switch sequence: enter `SWITCHING` → play transition animation → request cur
 
 ## State Machine
 
-```
-OFF → STARTING → RUNNING ⇄ SWITCHING
-        ↑            │
-        │            ├─→ STOPPING → IDLE
-        │            └─→ ERROR
-      IDLE ←──────────────┘
-        │
-        └─→ SHUTTING_DOWN → OFF
+```mermaid
+stateDiagram-v2
+    [*] --> OFF
+    OFF --> IDLE: Power On
+    IDLE --> STARTING: Start Program
+    STARTING --> RUNNING: Program Launched
+    RUNNING --> SWITCHING: Switch Program
+    SWITCHING --> RUNNING: New Program Launched
+    RUNNING --> STOPPING: Stop Program
+    STOPPING --> IDLE: Program Stopped
+    RUNNING --> ERROR: Program Failed
+    ERROR --> IDLE: Retry / Stop
+    IDLE --> SHUTTING_DOWN: Shutdown
+    SHUTTING_DOWN --> OFF: Relay Off
+    RUNNING --> SHUTTING_DOWN: Shutdown (immediate)
 ```
 
 | State | Meaning | Accepted commands |

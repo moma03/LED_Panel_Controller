@@ -25,6 +25,26 @@ TOPIC_STATUS = "display/status"
 TOPIC_CURRENT = "display/current"
 TOPIC_ERRORS = "display/errors"
 
+TOPIC_PENDING_PROGRAM = "display/pending/program"
+TOPIC_PENDING_SUBPROGRAM = "display/pending/subprogram"
+
+# Home Assistant MQTT Discovery: https://www.home-assistant.io/integrations/mqtt/#discovery-messages
+_DISCOVERY_PREFIX = "homeassistant"
+_NODE_ID = "led_display_controller"
+_DEVICE = {
+    "identifiers": [_NODE_ID],
+    "name": "LED Display Controller",
+    "manufacturer": "Custom",
+    "model": "led-controller",
+}
+# Reads the pending program/subprogram selects (see _select_config below) so a single
+# button press can carry both fields without a dedicated MQTT round-trip per field.
+_START_SWITCH_COMMAND_TEMPLATE = (
+    "{% set sub = states('select.led_display_subprogram') %}"
+    "{{ {'program': states('select.led_display_program'),"
+    " 'subprogram': none if sub in ['none', 'unknown', 'unavailable'] else sub} | tojson }}"
+)
+
 _CONTROL_TOPIC_COMMANDS = {
     "display/control/power_on": Command.POWER_ON,
     "display/control/start": Command.START,
@@ -103,3 +123,114 @@ class MQTTInterface:
 
     def publish_error(self, message: str) -> None:
         self._client.publish(TOPIC_ERRORS, json.dumps({"message": message}))
+
+    def publish_discovery(self, config: AppConfig) -> None:
+        """Publishes retained Home Assistant MQTT Discovery configs so entities are
+        created/updated automatically from config.yaml — no hand-maintained option
+        lists on the Home Assistant side, per the single-source-of-truth design goal."""
+        for object_id, entity_config in self._sensor_configs():
+            self._publish_discovery_entity("sensor", object_id, entity_config)
+        for object_id, entity_config in self._select_configs(config):
+            self._publish_discovery_entity("select", object_id, entity_config)
+        for object_id, entity_config in self._button_configs():
+            self._publish_discovery_entity("button", object_id, entity_config)
+
+    def _publish_discovery_entity(self, component: str, object_id: str, entity_config: dict) -> None:
+        topic = f"{_DISCOVERY_PREFIX}/{component}/{_NODE_ID}/{object_id}/config"
+        payload = {
+            "unique_id": f"{_NODE_ID}_{object_id}",
+            "device": _DEVICE,
+            **entity_config,
+        }
+        self._client.publish(topic, json.dumps(payload), retain=True)
+
+    def _sensor_configs(self):
+        return [
+            ("status", {
+                "name": "Status",
+                "state_topic": TOPIC_STATUS,
+                "value_template": "{{ value_json.state }}",
+                "icon": "mdi:state-machine",
+            }),
+            ("current_program", {
+                "name": "Current Program",
+                "state_topic": TOPIC_CURRENT,
+                "value_template": "{{ value_json.program | default('none') }}",
+                "icon": "mdi:monitor-dashboard",
+            }),
+            ("current_subprogram", {
+                "name": "Current Subprogram",
+                "state_topic": TOPIC_CURRENT,
+                "value_template": "{{ value_json.subprogram | default('none') }}",
+                "icon": "mdi:subdirectory-arrow-right",
+            }),
+            ("last_error", {
+                "name": "Last Error",
+                "state_topic": TOPIC_ERRORS,
+                "value_template": "{{ value_json.message }}",
+                "icon": "mdi:alert-circle-outline",
+            }),
+        ]
+
+    def _select_configs(self, config: AppConfig):
+        subprogram_ids = sorted(
+            {sub_id for program in config.programs.values() for sub_id in program.subprograms}
+        )
+        return [
+            ("program", {
+                "name": "Program",
+                "options": list(config.programs.keys()),
+                "command_topic": TOPIC_PENDING_PROGRAM,
+                "state_topic": TOPIC_PENDING_PROGRAM,
+                "retain": True,
+                "icon": "mdi:monitor",
+            }),
+            ("subprogram", {
+                "name": "Subprogram",
+                "options": ["none"] + subprogram_ids,
+                "command_topic": TOPIC_PENDING_SUBPROGRAM,
+                "state_topic": TOPIC_PENDING_SUBPROGRAM,
+                "retain": True,
+                "icon": "mdi:subdirectory-arrow-right",
+            }),
+        ]
+
+    def _button_configs(self):
+        return [
+            ("power_on", {
+                "name": "Power On",
+                "command_topic": "display/control/power_on",
+                "payload_press": "",
+                "icon": "mdi:power",
+            }),
+            ("start_program", {
+                "name": "Start Program",
+                "command_topic": "display/control/start",
+                "command_template": _START_SWITCH_COMMAND_TEMPLATE,
+                "icon": "mdi:play",
+            }),
+            ("switch_program", {
+                "name": "Switch Program",
+                "command_topic": "display/control/switch",
+                "command_template": _START_SWITCH_COMMAND_TEMPLATE,
+                "icon": "mdi:swap-horizontal",
+            }),
+            ("stop", {
+                "name": "Stop",
+                "command_topic": "display/control/stop",
+                "payload_press": "",
+                "icon": "mdi:stop",
+            }),
+            ("retry", {
+                "name": "Retry",
+                "command_topic": "display/control/retry",
+                "payload_press": "",
+                "icon": "mdi:refresh",
+            }),
+            ("shutdown", {
+                "name": "Shutdown",
+                "command_topic": "display/control/shutdown",
+                "payload_press": "",
+                "icon": "mdi:power-off",
+            }),
+        ]

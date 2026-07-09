@@ -1,0 +1,55 @@
+# Example Lovelace dashboard card for the LED Display Controller entities.
+# Paste into a dashboard view (Settings > Dashboards > Edit > Raw configuration editor),
+# or add as a card in the UI editor by pointing it at these entity ids.
+
+type: vertical-stack
+cards:
+  - type: entities
+    title: LED Display
+    entities:
+      - entity: sensor.led_display_status
+        name: Status
+      - entity: sensor.led_display_current_program
+        name: Current Program
+      - entity: sensor.led_display_current_subprogram
+        name: Current Subprogram
+      - entity: sensor.led_display_last_error
+        name: Last Error
+
+  - type: entities
+    title: Select Program
+    entities:
+      - entity: select.led_display_program
+        name: Program
+      - entity: select.led_display_subprogram
+        name: Subprogram (Train Board only)
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        entity: button.led_display_power_on
+        name: Power On
+        icon: mdi:power
+      - type: button
+        entity: button.led_display_start_program
+        name: Start
+        icon: mdi:play
+      - type: button
+        entity: button.led_display_switch_program
+        name: Switch
+        icon: mdi:swap-horizontal
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        entity: button.led_display_stop
+        name: Stop
+        icon: mdi:stop
+      - type: button
+        entity: button.led_display_retry
+        name: Retry
+        icon: mdi:refresh
+      - type: button
+        entity: button.led_display_shutdown
+        name: Shutdown
+        icon: mdi:power-off

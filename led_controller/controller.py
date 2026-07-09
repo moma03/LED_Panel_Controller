@@ -50,6 +50,7 @@ class DisplayController:
     def start(self) -> None:
         self._mqtt.start(self._config.mqtt_host, self._config.mqtt_port)
         self._mqtt.publish_programs(self._config)
+        self._mqtt.publish_discovery(self._config)
         self._on_state_change(self._sm.state, self._sm.state)
 
     def request_stop(self) -> None:
