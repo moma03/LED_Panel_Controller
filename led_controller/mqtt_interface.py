@@ -40,10 +40,15 @@ _DEVICE = {
 }
 # Reads the pending program/subprogram selects (see _select_config below) so a single
 # button press can carry both fields without a dedicated MQTT round-trip per field.
+# The "none"/"unknown"/"unavailable" guard covers both a genuinely-untouched select
+# and (as a fallback) an entity_id typo -- either way we'd rather send null than one
+# of those literal strings as a program/subprogram id.
+_NULL_LIKE_STATES = "['none', 'unknown', 'unavailable']"
 _START_SWITCH_COMMAND_TEMPLATE = (
+    "{% set prog = states('select.led_display_program') %}"
     "{% set sub = states('select.led_display_subprogram') %}"
-    "{{ {'program': states('select.led_display_program'),"
-    " 'subprogram': none if sub in ['none', 'unknown', 'unavailable'] else sub} | tojson }}"
+    "{{ {'program': none if prog in " + _NULL_LIKE_STATES + " else prog,"
+    " 'subprogram': none if sub in " + _NULL_LIKE_STATES + " else sub} | tojson }}"
 )
 
 _CONTROL_TOPIC_COMMANDS = {
@@ -143,8 +148,14 @@ class MQTTInterface:
 
     def _publish_discovery_entity(self, component: str, object_id: str, entity_config: dict) -> None:
         topic = f"{_DISCOVERY_PREFIX}/{component}/{_NODE_ID}/{object_id}/config"
+        # Without an explicit object_id, Home Assistant slugifies the entity_id from
+        # `name` (and device name) instead -- which silently produced entity_ids other
+        # than the select.led_display_program / select.led_display_subprogram the
+        # buttons' command_template and the Lovelace example assume, so states()
+        # always returned "unknown" for them regardless of what was actually selected.
         payload = {
             "unique_id": f"{_NODE_ID}_{object_id}",
+            "object_id": f"led_display_{object_id}",
             "device": _DEVICE,
             **entity_config,
         }

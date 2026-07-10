@@ -103,3 +103,23 @@ def test_start_and_switch_buttons_share_command_template():
     assert start["command_template"] == switch["command_template"]
     assert "select.led_display_program" in start["command_template"]
     assert "select.led_display_subprogram" in start["command_template"]
+
+
+def test_program_and_subprogram_selects_have_explicit_object_id():
+    # Without this, Home Assistant slugifies its own entity_id from `name`, which can
+    # produce something other than select.led_display_program/subprogram -- exactly
+    # what the buttons' command_template above hardcodes and depends on.
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())
+    program_select = next(m for m in discovery_messages(client) if "select/led_display_controller/program/" in m[0])[1]
+    subprogram_select = next(m for m in discovery_messages(client) if "select/led_display_controller/subprogram" in m[0])[1]
+    assert program_select["object_id"] == "led_display_program"
+    assert subprogram_select["object_id"] == "led_display_subprogram"
+
+
+def test_every_discovery_entity_has_an_object_id():
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())
+    for topic, payload, _ in discovery_messages(client):
+        assert "object_id" in payload, f"{topic} is missing object_id"
+        assert payload["object_id"].startswith("led_display_")
