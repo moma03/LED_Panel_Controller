@@ -43,28 +43,28 @@ matrix:
 
 # System animations: run like any other program, but not user-selectable.
 # idle/transition/shutdown live in programs/ and need the rgbmatrix Python
-# package built from the third_party/rpi-rgb-led-matrix submodule first —
-# see the top-level README.md. {matrix_options} is filled in from the
-# `matrix:` block above; every display program accepts it since they all
-# derive from programs/matrix_program.py.
+# extension built from the third_party/rpi-rgb-led-matrix submodule first —
+# see the top-level README.md. Matrix hardware flags (--led-rows, --led-cols,
+# --led-gpio-mapping, etc.) default to a single 64x32 chain on an Adafruit
+# Triple LED Matrix Bonnet; pass them explicitly here to override.
 system:
-  idle: python3 programs/idle.py --label "LED DISPLAY" {matrix_options}
-  transition: python3 programs/transition.py --program-name "{program}" {matrix_options}
-  shutdown: python3 programs/shutdown.py --message "Goodbye!" {matrix_options}
+  idle: python3 programs/idle.py --label "LED DISPLAY"
+  transition: python3 programs/transition.py --program-name "{program}"
+  shutdown: python3 programs/shutdown.py --message "Goodbye!"
 
 programs:
 
   weather:
     name: Weather
-    command: python3 programs/weather.py {matrix_options}
+    command: python3 programs/weather.py
 
   clock:
     name: Clock
-    command: python3 programs/clock.py {matrix_options}
+    command: python3 programs/clock.py
 
   trainboard:
     name: Train Board
-    command: python3 programs/trainboard.py --station {subprogram} {matrix_options}
+    command: python3 programs/trainboard.py --station {subprogram}
     subprograms:
       berlin:
         name: Berlin Hbf
