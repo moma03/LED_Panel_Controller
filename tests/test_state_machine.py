@@ -45,5 +45,5 @@ def test_transition_notifies_listeners():
 
 
 def test_transient_states_accept_no_commands():
-    for state in (State.STARTING, State.SWITCHING, State.STOPPING, State.SHUTTING_DOWN):
+    for state in (State.STARTING, State.STOPPING, State.SHUTTING_DOWN):
         assert ALLOWED_COMMANDS[state] == frozenset()

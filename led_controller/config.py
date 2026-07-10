@@ -47,16 +47,7 @@ class SystemConfig:
     """Commands for the controller's own animations — not user-selectable programs."""
 
     idle: str
-    transition: str
     shutdown: str
-
-    def resolve_transition_command(self, target_program_name: str) -> str:
-        """Substitutes the {program} placeholder with the display name of the
-        program being switched to. Optional: commands without the placeholder
-        are returned unchanged, same as Program.resolve_command's {subprogram}."""
-        if "{program}" not in self.transition:
-            return self.transition
-        return self.transition.replace("{program}", target_program_name)
 
 
 @dataclass(frozen=True)
@@ -67,6 +58,10 @@ class RelayConfig:
     # mapping (which Adafruit's bonnets use) — everything from GPIO2-27 is a matrix signal
     # on at least one chain. Verify against your specific bonnet/HAT before wiring.
     pin: int = 0
+    # Most cheap relay boards are active-low (LOW energizes the relay) -- set this to
+    # match the board actually wired up so on()/off() drive the physical PSU state
+    # they claim to, instead of energizing it the moment the GPIO pin is initialized.
+    active_low: bool = False
 
 
 # Maps config.yaml's matrix: block keys (RGBMatrixOptions attribute names, so the
@@ -179,11 +174,11 @@ def _load_programs(raw: dict) -> dict[str, Program]:
 
 def _load_system(raw: dict) -> SystemConfig:
     if not raw:
-        raise ConfigError("config must define a 'system' block with idle/transition/shutdown commands")
-    for required in ("idle", "transition", "shutdown"):
+        raise ConfigError("config must define a 'system' block with idle/shutdown commands")
+    for required in ("idle", "shutdown"):
         if required not in raw:
             raise ConfigError(f"'system' block missing required field '{required}'")
-    return SystemConfig(idle=raw["idle"], transition=raw["transition"], shutdown=raw["shutdown"])
+    return SystemConfig(idle=raw["idle"], shutdown=raw["shutdown"])
 
 
 def _load_relay(raw: dict | None) -> RelayConfig:
@@ -191,7 +186,7 @@ def _load_relay(raw: dict | None) -> RelayConfig:
     backend = raw.get("backend", "mock")
     if backend not in ("gpio", "mock"):
         raise ConfigError(f"relay.backend must be 'gpio' or 'mock', got {backend!r}")
-    return RelayConfig(backend=backend, pin=raw.get("pin", 0))
+    return RelayConfig(backend=backend, pin=raw.get("pin", 0), active_low=bool(raw.get("active_low", False)))
 
 
 def _load_matrix(raw: dict | None) -> MatrixConfig:

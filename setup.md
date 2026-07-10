@@ -2,7 +2,7 @@
 
 ## Purpose
 
-A lightweight Python service on a Raspberry Pi that owns all state for what's shown on an LED matrix: discovering programs from config, starting/stopping/switching them, managing transitions, driving the display power relay, and reporting status to Home Assistant.
+A lightweight Python service on a Raspberry Pi that owns all state for what's shown on an LED matrix: discovering programs from config, starting/stopping/switching them, driving the display power relay, and reporting status to Home Assistant.
 
 Home Assistant is a UI only — it never manages processes and is never the source of truth. The controller owns all state.
 
@@ -41,8 +41,7 @@ programs:
 ```
 
 The controller substitutes placeholders before executing the command. Supported now:
-`{subprogram}` (any program), `{program}` (`system.transition` only, the display name
-of the program being switched to), and `{matrix_options}` (any program, expanded into
+`{subprogram}` (any program) and `{matrix_options}` (any program, expanded into
 the individual `--led-*` LED matrix hardware flags from the top-level `matrix:` config
 block — see `led_controller/config.py`'s `MatrixConfig`). Reserved for later:
 `{language}`, `{theme}`, `{rotation}`.
@@ -53,7 +52,7 @@ If a command requests a subprogram that isn't defined in config, the request is 
 
 Exactly one foreground program runs at a time; the controller tracks the active process handle and refuses to start a second one while it's set.
 
-Switch sequence: enter `SWITCHING` → play transition animation → request current program to terminate → wait for graceful exit → SIGKILL on timeout → launch new program → wait for successful startup → publish `RUNNING`.
+Start sequence: enter `STARTING` → request current foreground (idle animation or active program, whichever is set) to terminate → wait for graceful exit → SIGKILL on timeout → launch new program → wait for successful startup → publish `RUNNING`. There is no separate switch sequence: starting a program while one is already `RUNNING` runs the exact same sequence — the old program stops, the new one starts.
 
 ## State Machine
 
@@ -63,12 +62,11 @@ stateDiagram-v2
     OFF --> IDLE: Power On
     IDLE --> STARTING: Start Program
     STARTING --> RUNNING: Program Launched
-    RUNNING --> SWITCHING: Switch Program
-    SWITCHING --> RUNNING: New Program Launched
+    RUNNING --> STARTING: Start Program (replaces current)
     RUNNING --> STOPPING: Stop Program
     STOPPING --> IDLE: Program Stopped
     RUNNING --> ERROR: Program Failed
-    ERROR --> IDLE: Retry / Stop
+    ERROR --> IDLE: Reset / Stop
     IDLE --> SHUTTING_DOWN: Shutdown
     SHUTTING_DOWN --> OFF: Relay Off
     RUNNING --> SHUTTING_DOWN: Shutdown (immediate)
@@ -79,24 +77,23 @@ stateDiagram-v2
 | `OFF` | Display PSU disabled | Power On → `STARTING`/`IDLE` |
 | `IDLE` | Idle animation showing | Start Program, Shutdown |
 | `STARTING` | Program launching | *(none)* |
-| `RUNNING` | Program active | Stop, Switch Program, Shutdown |
-| `SWITCHING` | Transition animation; old program stopping, new one launching | *(none)* |
+| `RUNNING` | Program active | Start Program (replaces current), Stop, Shutdown |
 | `STOPPING` | Current program stopping, no replacement queued | *(none)* |
 | `SHUTTING_DOWN` | Shutdown animation + relay off | *(none)* |
-| `ERROR` | Program failed; controller stays responsive | Retry, Stop, Shutdown |
+| `ERROR` | Program failed; controller stays responsive | Reset, Stop, Shutdown |
 
 Notes:
-- **Power On** (`OFF`) re-enables the PSU and moves to `IDLE`, playing the idle animation; it does not auto-launch a program unless a default-startup program is configured (see Extensibility).
-- **Stop** (`RUNNING`) goes through `STOPPING` and lands in `IDLE`. **Switch Program** (`RUNNING`) goes through `SWITCHING` and lands in `RUNNING` with the new program — the distinction is whether a replacement program is queued.
-- **Changing a subprogram** of the already-running program is handled identically to Switch Program (same command re-invoked with a new `{subprogram}` value); it is not a separate state path.
-- **Retry** (`ERROR`) relaunches the most recently failed program via the normal `STARTING` path.
+- **Power On** (`OFF`) re-enables the PSU and moves to `IDLE`, playing the idle animation; it does not auto-launch a program unless a default-startup program is configured (see Extensibility). The relay must stay de-energized from process start until this command is received — see Relay Control.
+- **Stop** (`RUNNING`) goes through `STOPPING` and lands in `IDLE`. **Start Program** (`RUNNING`) goes straight back through `STARTING` with the new program/subprogram — same path as starting from `IDLE`, just with a program already in the foreground to stop first.
+- **Changing a subprogram** of the already-running program is handled identically (same Start command re-invoked with a new `{subprogram}` value); it is not a separate state path.
+- **Reset** (`ERROR`) force-quits whatever's in the foreground, discards the failed program/subprogram and the error, and settles into `IDLE` — it does not relaunch the program that just failed.
 
 ## Command Policy
 
 Every command is validated against the current state; invalid commands are rejected immediately with no queue:
 
 ```
-Current State: SWITCHING
+Current State: STARTING
 Result: Rejected — controller busy
 ```
 
@@ -110,11 +107,16 @@ The controller publishes available programs, current state, current program/subp
 
 **Publishes:** `display/programs`, `display/status`, `display/current`, `display/errors`
 
-**Subscribes:** `display/control/power_on`, `display/control/start`, `display/control/switch`, `display/control/stop`, `display/control/retry`, `display/control/shutdown`
+**Subscribes:** `display/control/power_on`, `display/control/start`, `display/control/stop`, `display/control/reset`, `display/control/shutdown`
 
 ## Relay Control
 
-The Raspberry Pi always stays powered — only the LED PSU is switched.
+The Raspberry Pi always stays powered — only the LED PSU is switched. The relay must
+be de-energized from the moment the controller process starts (`OFF` state) until it
+receives a Power On command — never energized as a side effect of initializing the
+GPIO pin. Boards wired active-low need `relay.active_low: true` in config.yaml so
+`RelayController.off()` actually de-energizes the physical relay instead of the
+reverse — see `led_controller/relay.py`.
 
 ```
 RUNNING → Shutdown command → shutdown animation → stop active program

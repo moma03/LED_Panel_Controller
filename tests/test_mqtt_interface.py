@@ -19,9 +19,8 @@ def test_successful_connect_subscribes_to_control_topics():
     assert set(client.subscribed_topics) == {
         "display/control/power_on",
         "display/control/start",
-        "display/control/switch",
         "display/control/stop",
-        "display/control/retry",
+        "display/control/reset",
         "display/control/shutdown",
     }
 
@@ -61,9 +60,8 @@ def test_publish_discovery_covers_all_expected_entities():
         "homeassistant/select/led_display_controller/subprogram/config",
         "homeassistant/button/led_display_controller/power_on/config",
         "homeassistant/button/led_display_controller/start_program/config",
-        "homeassistant/button/led_display_controller/switch_program/config",
         "homeassistant/button/led_display_controller/stop/config",
-        "homeassistant/button/led_display_controller/retry/config",
+        "homeassistant/button/led_display_controller/reset/config",
         "homeassistant/button/led_display_controller/shutdown/config",
     }
 
@@ -95,12 +93,10 @@ def test_all_entities_share_the_same_device():
     assert len(devices) == 1
 
 
-def test_start_and_switch_buttons_share_command_template():
+def test_start_button_reads_both_selects():
     mqtt, client = build_interface()
     mqtt.publish_discovery(make_config())
     start = next(m for m in discovery_messages(client) if "start_program" in m[0])[1]
-    switch = next(m for m in discovery_messages(client) if "switch_program" in m[0])[1]
-    assert start["command_template"] == switch["command_template"]
     assert "select.led_display_program" in start["command_template"]
     assert "select.led_display_subprogram" in start["command_template"]
 

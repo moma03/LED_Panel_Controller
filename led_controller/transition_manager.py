@@ -86,25 +86,11 @@ class TransitionManager:
         self._sm.transition_to(State.IDLE)
 
     def start(self, program_id: str, subprogram_id: str | None) -> None:
+        """Starts `program_id`, stopping whatever is currently in the foreground first
+        (the idle animation from IDLE, or the active program from RUNNING) -- there's
+        no separate switch sequence, starting a new program while one is already
+        running just means the old one stops and the new one starts."""
         self._sm.transition_to(State.STARTING)
-        self._stop_foreground()
-        try:
-            self._launch_program(program_id, subprogram_id)
-        except TransitionError as exc:
-            self._fail(program_id, subprogram_id, str(exc))
-            return
-        self._sm.transition_to(State.RUNNING)
-
-    def switch(self, program_id: str, subprogram_id: str | None) -> None:
-        program = self._config.programs.get(program_id)
-        if program is None:
-            self._fail(program_id, subprogram_id, f"unknown program {program_id!r}")
-            return
-        self._sm.transition_to(State.SWITCHING)
-        transition_command = self._config.render_command(
-            self._config.system.resolve_transition_command(program.name)
-        )
-        self._proc.run_to_completion(transition_command)
         self._stop_foreground()
         try:
             self._launch_program(program_id, subprogram_id)
@@ -136,11 +122,17 @@ class TransitionManager:
             return None
         return self._proc.poll(self._foreground)
 
-    def retry(self) -> None:
-        if self.last_error is None:
-            raise TransitionError("no previous error to retry")
-        program_id, subprogram_id = self.last_error.program_id, self.last_error.subprogram_id
-        self.start(program_id, subprogram_id)
+    def reset(self) -> None:
+        """Force-quits whatever's in the foreground (the crashed program is normally
+        already gone by the time we're in ERROR -- see _fail -- but this doesn't
+        assume that) and settles into a stable IDLE, clearing the error rather than
+        relaunching the program that just failed."""
+        self._stop_foreground()
+        self.active_program_id = None
+        self.active_subprogram_id = None
+        self.last_error = None
+        self._launch_idle()
+        self._sm.transition_to(State.IDLE)
 
     def handle_unexpected_exit(self, exit_code: int) -> None:
         """Called by the controller loop when the foreground program dies on its own."""

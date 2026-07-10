@@ -44,7 +44,7 @@ _DEVICE = {
 # and (as a fallback) an entity_id typo -- either way we'd rather send null than one
 # of those literal strings as a program/subprogram id.
 _NULL_LIKE_STATES = "['none', 'unknown', 'unavailable']"
-_START_SWITCH_COMMAND_TEMPLATE = (
+_START_COMMAND_TEMPLATE = (
     "{% set prog = states('select.led_display_controller_program') %}"
     "{% set sub = states('select.led_display_controller_subprogram') %}"
     "{{ {'program': none if prog in " + _NULL_LIKE_STATES + " else prog,"
@@ -54,9 +54,8 @@ _START_SWITCH_COMMAND_TEMPLATE = (
 _CONTROL_TOPIC_COMMANDS = {
     "display/control/power_on": Command.POWER_ON,
     "display/control/start": Command.START,
-    "display/control/switch": Command.SWITCH,
     "display/control/stop": Command.STOP,
-    "display/control/retry": Command.RETRY,
+    "display/control/reset": Command.RESET,
     "display/control/shutdown": Command.SHUTDOWN,
 }
 
@@ -223,14 +222,8 @@ class MQTTInterface:
             ("start_program", {
                 "name": "Start Program",
                 "command_topic": "display/control/start",
-                "command_template": _START_SWITCH_COMMAND_TEMPLATE,
+                "command_template": _START_COMMAND_TEMPLATE,
                 "icon": "mdi:play",
-            }),
-            ("switch_program", {
-                "name": "Switch Program",
-                "command_topic": "display/control/switch",
-                "command_template": _START_SWITCH_COMMAND_TEMPLATE,
-                "icon": "mdi:swap-horizontal",
             }),
             ("stop", {
                 "name": "Stop",
@@ -238,11 +231,11 @@ class MQTTInterface:
                 "payload_press": "",
                 "icon": "mdi:stop",
             }),
-            ("retry", {
-                "name": "Retry",
-                "command_topic": "display/control/retry",
+            ("reset", {
+                "name": "Reset",
+                "command_topic": "display/control/reset",
                 "payload_press": "",
-                "icon": "mdi:refresh",
+                "icon": "mdi:restart",
             }),
             ("shutdown", {
                 "name": "Shutdown",

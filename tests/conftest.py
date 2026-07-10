@@ -24,7 +24,7 @@ def make_config(process_terminate_timeout: float = 1.0) -> AppConfig:
             subprograms={"berlin": Subprogram(id="berlin", name="Berlin Hbf")},
         ),
     }
-    system = SystemConfig(idle=SLEEP_CMD, transition=NOOP_CMD, shutdown=NOOP_CMD)
+    system = SystemConfig(idle=SLEEP_CMD, shutdown=NOOP_CMD)
     relay = RelayConfig(backend="mock", pin=26)
     return AppConfig(
         programs=programs,

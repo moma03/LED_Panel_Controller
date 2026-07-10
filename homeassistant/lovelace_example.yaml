@@ -34,10 +34,6 @@ cards:
         entity: button.led_display_start_program
         name: Start
         icon: mdi:play
-      - type: button
-        entity: button.led_display_switch_program
-        name: Switch
-        icon: mdi:swap-horizontal
 
   - type: horizontal-stack
     cards:
@@ -46,9 +42,9 @@ cards:
         name: Stop
         icon: mdi:stop
       - type: button
-        entity: button.led_display_retry
-        name: Retry
-        icon: mdi:refresh
+        entity: button.led_display_reset
+        name: Reset
+        icon: mdi:restart
       - type: button
         entity: button.led_display_shutdown
         name: Shutdown

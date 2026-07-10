@@ -15,7 +15,8 @@ from __future__ import annotations
 import os
 import sys
 
-_SUBMODULE_ROOT = os.path.join(os.path.dirname(__file__), "..", "third_party", "rpi-rgb-led-matrix")
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_SUBMODULE_ROOT = os.path.join(_THIS_DIR, "..", "third_party", "rpi-rgb-led-matrix")
 _SAMPLES_DIR = os.path.join(_SUBMODULE_ROOT, "bindings", "python", "samples")
 FONTS_DIR = os.path.join(_SUBMODULE_ROOT, "fonts")
 

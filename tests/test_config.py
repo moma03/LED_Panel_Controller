@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from led_controller.config import ConfigError, SystemConfig, load_config
+from led_controller.config import ConfigError, load_config
 
 VALID_YAML = """
 system:
   idle: python3 idle.py
-  transition: python3 transition.py
   shutdown: python3 shutdown.py
 
 programs:
@@ -59,7 +58,7 @@ def test_mqtt_credentials_are_parsed(tmp_path):
 
 
 def test_missing_programs_raises(tmp_path):
-    text = "system:\n  idle: a\n  transition: b\n  shutdown: c\n"
+    text = "system:\n  idle: a\n  shutdown: c\n"
     with pytest.raises(ConfigError):
         load_config(write(tmp_path, text))
 
@@ -107,18 +106,15 @@ def test_invalid_relay_backend_raises(tmp_path):
         load_config(write(tmp_path, text))
 
 
-def test_resolve_transition_command_substitutes_program_name():
-    system = SystemConfig(
-        idle="python3 idle.py",
-        transition='python3 transition.py --program-name "{program}"',
-        shutdown="python3 shutdown.py",
-    )
-    assert system.resolve_transition_command("Weather") == 'python3 transition.py --program-name "Weather"'
+def test_relay_active_low_defaults_to_false(tmp_path):
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.relay.active_low is False
 
 
-def test_resolve_transition_command_without_placeholder_is_unchanged():
-    system = SystemConfig(idle="a", transition="python3 transition.py", shutdown="c")
-    assert system.resolve_transition_command("Weather") == "python3 transition.py"
+def test_relay_active_low_is_parsed(tmp_path):
+    text = VALID_YAML + "\nrelay:\n  backend: gpio\n  active_low: true\n"
+    config = load_config(write(tmp_path, text))
+    assert config.relay.active_low is True
 
 
 def test_matrix_block_defaults_to_empty(tmp_path):

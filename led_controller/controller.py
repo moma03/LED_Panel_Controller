@@ -38,7 +38,10 @@ class DisplayController:
         self._sm = state_machine or StateMachine()
         self._proc = process_manager or ProcessManager()
         self._tm = transition_manager or TransitionManager(
-            config, self._sm, self._proc, build_relay(config.relay.backend, config.relay.pin)
+            config,
+            self._sm,
+            self._proc,
+            build_relay(config.relay.backend, config.relay.pin, config.relay.active_low),
         )
         self._sm.add_listener(self._on_state_change)
         self._stop_event = threading.Event()
@@ -92,12 +95,10 @@ class DisplayController:
                 self._tm.power_on()
             elif command is Command.START:
                 self._tm.start(payload.get("program"), payload.get("subprogram"))
-            elif command is Command.SWITCH:
-                self._tm.switch(payload.get("program"), payload.get("subprogram"))
             elif command is Command.STOP:
                 self._tm.stop()
-            elif command is Command.RETRY:
-                self._tm.retry()
+            elif command is Command.RESET:
+                self._tm.reset()
             elif command is Command.SHUTDOWN:
                 self._tm.shutdown()
         except TransitionError as exc:

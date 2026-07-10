@@ -53,7 +53,7 @@ def test_power_on_then_start_reaches_running():
     controller._mqtt.stop()
 
 
-def test_switch_between_programs():
+def test_start_replaces_running_program():
     from led_controller.commands import Command
 
     controller, client, q = build_controller()
@@ -62,7 +62,7 @@ def test_switch_between_programs():
     send(q, Command.START, {"program": "ok"})
     controller.step(timeout=0.1)
 
-    send(q, Command.SWITCH, {"program": "trainboard", "subprogram": "berlin"})
+    send(q, Command.START, {"program": "trainboard", "subprogram": "berlin"})
     controller.step(timeout=0.1)
     assert controller.state == State.RUNNING
     current_payload = next(
@@ -117,7 +117,7 @@ def test_unexpected_exit_triggers_error_state():
     assert any("fail" in e["message"] for e in errors)
 
 
-def test_retry_after_error():
+def test_reset_after_error_force_quits_and_returns_to_idle():
     from led_controller.commands import Command
 
     controller, _, q = build_controller()
@@ -132,17 +132,20 @@ def test_retry_after_error():
     controller.step(timeout=0.1)
     assert controller.state == State.ERROR
 
-    send(q, Command.RETRY)
+    send(q, Command.RESET)
     controller.step(timeout=0.1)
-    assert controller.state == State.RUNNING
+    # Reset settles into a stable idle instead of relaunching the program that crashed.
+    assert controller.state == State.IDLE
+    assert controller._tm.active_program_id is None
+    assert controller._tm.last_error is None
 
 
 def test_invalid_command_is_rejected_and_published():
     from led_controller.commands import Command
 
     controller, client, q = build_controller()
-    # SWITCH is only valid in RUNNING; controller starts in OFF.
-    send(q, Command.SWITCH, {"program": "ok"})
+    # RESET is only valid in ERROR; controller starts in OFF.
+    send(q, Command.RESET)
     controller.step(timeout=0.1)
     assert controller.state == State.OFF
     errors = [json.loads(p) for topic, p, _ in client.published if topic == "display/errors"]

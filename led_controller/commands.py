@@ -14,7 +14,6 @@ class State(Enum):
     IDLE = "IDLE"
     STARTING = "STARTING"
     RUNNING = "RUNNING"
-    SWITCHING = "SWITCHING"
     STOPPING = "STOPPING"
     SHUTTING_DOWN = "SHUTTING_DOWN"
     ERROR = "ERROR"
@@ -23,24 +22,24 @@ class State(Enum):
 class Command(Enum):
     POWER_ON = "power_on"
     START = "start"
-    SWITCH = "switch"
     STOP = "stop"
-    RETRY = "retry"
+    RESET = "reset"
     SHUTDOWN = "shutdown"
 
 
 # Mirrors the state table in setup.md exactly. States not listed here (STARTING,
-# SWITCHING, STOPPING, SHUTTING_DOWN) accept no commands — they're transient and
-# busy, so any incoming command is rejected while the controller passes through them.
+# STOPPING, SHUTTING_DOWN) accept no commands — they're transient and busy, so any
+# incoming command is rejected while the controller passes through them.
 ALLOWED_COMMANDS: dict[State, frozenset[Command]] = {
     State.OFF: frozenset({Command.POWER_ON}),
     State.IDLE: frozenset({Command.START, Command.SHUTDOWN}),
     State.STARTING: frozenset(),
-    State.RUNNING: frozenset({Command.STOP, Command.SWITCH, Command.SHUTDOWN}),
-    State.SWITCHING: frozenset(),
+    # Starting a program while one is already RUNNING just stops the current one
+    # and starts the new one -- there's no separate "switch" state for this.
+    State.RUNNING: frozenset({Command.START, Command.STOP, Command.SHUTDOWN}),
     State.STOPPING: frozenset(),
     State.SHUTTING_DOWN: frozenset(),
-    State.ERROR: frozenset({Command.RETRY, Command.STOP, Command.SHUTDOWN}),
+    State.ERROR: frozenset({Command.RESET, Command.STOP, Command.SHUTDOWN}),
 }
 
 
