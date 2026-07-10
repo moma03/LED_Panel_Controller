@@ -90,8 +90,12 @@ class TransitionManager:
         self._sm.transition_to(State.RUNNING)
 
     def switch(self, program_id: str, subprogram_id: str | None) -> None:
+        program = self._config.programs.get(program_id)
+        if program is None:
+            self._fail(program_id, subprogram_id, f"unknown program {program_id!r}")
+            return
         self._sm.transition_to(State.SWITCHING)
-        self._proc.run_to_completion(self._config.system.transition)
+        self._proc.run_to_completion(self._config.system.resolve_transition_command(program.name))
         self._stop_foreground()
         try:
             self._launch_program(program_id, subprogram_id)

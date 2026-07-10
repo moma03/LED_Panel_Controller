@@ -48,6 +48,14 @@ class SystemConfig:
     transition: str
     shutdown: str
 
+    def resolve_transition_command(self, target_program_name: str) -> str:
+        """Substitutes the {program} placeholder with the display name of the
+        program being switched to. Optional: commands without the placeholder
+        are returned unchanged, same as Program.resolve_command's {subprogram}."""
+        if "{program}" not in self.transition:
+            return self.transition
+        return self.transition.replace("{program}", target_program_name)
+
 
 @dataclass(frozen=True)
 class RelayConfig:

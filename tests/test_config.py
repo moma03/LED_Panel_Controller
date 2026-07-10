@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from led_controller.config import ConfigError, load_config
+from led_controller.config import ConfigError, SystemConfig, load_config
 
 VALID_YAML = """
 system:
@@ -91,3 +91,17 @@ def test_invalid_relay_backend_raises(tmp_path):
     text = VALID_YAML + "\nrelay:\n  backend: nonsense\n"
     with pytest.raises(ConfigError):
         load_config(write(tmp_path, text))
+
+
+def test_resolve_transition_command_substitutes_program_name():
+    system = SystemConfig(
+        idle="python3 idle.py",
+        transition='python3 transition.py --program-name "{program}"',
+        shutdown="python3 shutdown.py",
+    )
+    assert system.resolve_transition_command("Weather") == 'python3 transition.py --program-name "Weather"'
+
+
+def test_resolve_transition_command_without_placeholder_is_unchanged():
+    system = SystemConfig(idle="a", transition="python3 transition.py", shutdown="c")
+    assert system.resolve_transition_command("Weather") == "python3 transition.py"
