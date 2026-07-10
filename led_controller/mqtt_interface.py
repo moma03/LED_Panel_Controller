@@ -91,6 +91,7 @@ class MQTTInterface:
             self._client.subscribe(topic)
 
     def _on_message(self, _client, _userdata, message) -> None:
+        print(f"[led-controller] MQTT message received: {message.topic} {message.payload}")
         command = _CONTROL_TOPIC_COMMANDS.get(message.topic)
         if command is None:
             return
