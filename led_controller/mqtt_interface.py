@@ -45,8 +45,8 @@ _DEVICE = {
 # of those literal strings as a program/subprogram id.
 _NULL_LIKE_STATES = "['none', 'unknown', 'unavailable']"
 _START_SWITCH_COMMAND_TEMPLATE = (
-    "{% set prog = states('select.led_display_program') %}"
-    "{% set sub = states('select.led_display_subprogram') %}"
+    "{% set prog = states('select.led_display_controller_program') %}"
+    "{% set sub = states('select.led_display_controller_subprogram') %}"
     "{{ {'program': none if prog in " + _NULL_LIKE_STATES + " else prog,"
     " 'subprogram': none if sub in " + _NULL_LIKE_STATES + " else sub} | tojson }}"
 )
