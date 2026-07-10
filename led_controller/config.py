@@ -6,8 +6,10 @@ error instead of surfacing as a runtime crash mid-transition.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -67,16 +69,86 @@ class RelayConfig:
     pin: int = 0
 
 
+# Maps config.yaml's matrix: block keys (RGBMatrixOptions attribute names, so the
+# same names you'd use constructing one directly in Python) to the --led-* CLI flags
+# rpi-rgb-led-matrix's own SampleBase (and any program built against it, ours or
+# third-party) already parses for free. The two naming schemes genuinely differ in
+# places -- gpio_slowdown is --led-slowdown-gpio, chain_length is --led-chain -- so
+# this table exists to bridge them; it needs a new entry if upstream adds an option
+# you want to expose here. Source: rpi-rgb-led-matrix's
+# bindings/python/samples/samplebase.py.
+_MATRIX_VALUE_FLAGS: dict[str, str] = {
+    "rows": "--led-rows",
+    "cols": "--led-cols",
+    "chain_length": "--led-chain",
+    "parallel": "--led-parallel",
+    "hardware_mapping": "--led-gpio-mapping",
+    "row_address_type": "--led-row-addr-type",
+    "multiplexing": "--led-multiplexing",
+    "pwm_bits": "--led-pwm-bits",
+    "brightness": "--led-brightness",
+    "pwm_lsb_nanoseconds": "--led-pwm-lsb-nanoseconds",
+    "led_rgb_sequence": "--led-rgb-sequence",
+    "pixel_mapper_config": "--led-pixel-mapper",
+    "panel_type": "--led-panel-type",
+    "pwm_dither_bits": "--led-pwm-dither-bits",
+    "limit_refresh_rate_hz": "--led-limit-refresh",
+    "gpio_slowdown": "--led-slowdown-gpio",
+    "rp1_pio": "--led-rp1-pio",
+}
+
+# Boolean attributes map to a bare CLI flag, emitted only when the config value
+# equals the trigger (drop_privileges is inverted: the flag disables the default).
+_MATRIX_BOOL_FLAGS: dict[str, tuple[str, bool]] = {
+    "show_refresh_rate": ("--led-show-refresh", True),
+    "disable_hardware_pulsing": ("--led-no-hardware-pulse", True),
+    "drop_privileges": ("--led-no-drop-privs", False),
+}
+
+
+@dataclass(frozen=True)
+class MatrixConfig:
+    """RGBMatrixOptions attribute overrides from config.yaml's `matrix:` block,
+    rendered into the individual --led-* flags any rpi-rgb-led-matrix-based program
+    expects -- see _MATRIX_VALUE_FLAGS/_MATRIX_BOOL_FLAGS above."""
+
+    options: dict[str, Any] = field(default_factory=dict)
+
+    def as_cli_args(self) -> str:
+        parts = []
+        for key, value in self.options.items():
+            if key in _MATRIX_BOOL_FLAGS:
+                flag, trigger = _MATRIX_BOOL_FLAGS[key]
+                if value == trigger:
+                    parts.append(flag)
+            elif key in _MATRIX_VALUE_FLAGS:
+                parts.append(shlex.quote(f"{_MATRIX_VALUE_FLAGS[key]}={value}"))
+            else:
+                raise ConfigError(
+                    f"unknown matrix option {key!r} -- see led_controller/config.py's "
+                    "_MATRIX_VALUE_FLAGS/_MATRIX_BOOL_FLAGS"
+                )
+        return " ".join(parts)
+
+
 @dataclass(frozen=True)
 class AppConfig:
     programs: dict[str, Program]
     system: SystemConfig
     relay: RelayConfig
+    matrix: MatrixConfig = field(default_factory=MatrixConfig)
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883
     mqtt_username: str | None = None
     mqtt_password: str | None = None
     process_terminate_timeout: float = 5.0
+
+    def render_command(self, command: str) -> str:
+        """Substitutes the {matrix_options} placeholder, used by any program or
+        system command that needs the matrix hardware config -- see MatrixConfig."""
+        if "{matrix_options}" not in command:
+            return command
+        return command.replace("{matrix_options}", self.matrix.as_cli_args())
 
 
 def _load_subprograms(raw: dict, program_id: str) -> dict[str, Subprogram]:
@@ -122,6 +194,18 @@ def _load_relay(raw: dict | None) -> RelayConfig:
     return RelayConfig(backend=backend, pin=raw.get("pin", 0))
 
 
+def _load_matrix(raw: dict | None) -> MatrixConfig:
+    options = raw or {}
+    known = set(_MATRIX_VALUE_FLAGS) | set(_MATRIX_BOOL_FLAGS)
+    unknown = sorted(set(options) - known)
+    if unknown:
+        raise ConfigError(
+            f"unknown matrix option(s) {unknown} -- see led_controller/config.py's "
+            "_MATRIX_VALUE_FLAGS/_MATRIX_BOOL_FLAGS for supported RGBMatrixOptions attributes"
+        )
+    return MatrixConfig(options=options)
+
+
 def load_config(path: str | Path) -> AppConfig:
     path = Path(path)
     try:
@@ -140,6 +224,7 @@ def load_config(path: str | Path) -> AppConfig:
         programs=_load_programs(raw.get("programs")),
         system=_load_system(raw.get("system")),
         relay=_load_relay(raw.get("relay")),
+        matrix=_load_matrix(raw.get("matrix")),
         mqtt_host=mqtt_raw.get("host", "localhost"),
         mqtt_port=mqtt_raw.get("port", 1883),
         mqtt_username=mqtt_raw.get("username"),

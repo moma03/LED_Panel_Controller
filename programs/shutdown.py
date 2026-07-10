@@ -7,33 +7,31 @@ active process is stopped and the display PSU relay is switched off.
 
 from __future__ import annotations
 
-import argparse
 import time
 
-from matrix_options import add_matrix_arguments, build_matrix, graphics, load_font, text_width
+from matrix_program import SampleBase, graphics, load_font, text_width
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="LED matrix shutdown animation")
-    add_matrix_arguments(parser)
-    parser.add_argument("--message", default="Goodbye!", help="Message shown before the display powers off")
-    parser.add_argument("--duration", type=float, default=2.0, help="Seconds to show the message (default: 2.0)")
-    args = parser.parse_args()
+class Shutdown(SampleBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parser.add_argument("--message", default="Goodbye!", help="Message shown before the display powers off")
+        self.parser.add_argument("--duration", type=float, default=2.0, help="Seconds to show the message (default: 2.0)")
 
-    matrix = build_matrix(args)
-    font = load_font("7x13.bdf")
-    canvas = matrix.CreateFrameCanvas()
-    canvas.Fill(0, 0, 0)
+    def run(self) -> None:
+        font = load_font("7x13.bdf")
+        canvas = self.matrix.CreateFrameCanvas()
+        canvas.Fill(0, 0, 0)
 
-    white = graphics.Color(255, 255, 255)
-    x = max(0, (canvas.width - text_width(font, args.message)) // 2)
-    y = (canvas.height + font.height) // 2
-    graphics.DrawText(canvas, font, x, y, white, args.message)
-    matrix.SwapOnVSync(canvas)
+        white = graphics.Color(255, 255, 255)
+        x = max(0, (canvas.width - text_width(font, self.args.message)) // 2)
+        y = (canvas.height + font.height) // 2
+        graphics.DrawText(canvas, font, x, y, white, self.args.message)
+        self.matrix.SwapOnVSync(canvas)
 
-    time.sleep(args.duration)
-    matrix.Clear()
+        time.sleep(self.args.duration)
+        self.matrix.Clear()
 
 
 if __name__ == "__main__":
-    main()
+    Shutdown().process()

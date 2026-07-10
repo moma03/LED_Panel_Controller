@@ -40,7 +40,12 @@ programs:
         name: Hamburg Hbf
 ```
 
-The controller substitutes placeholders before executing the command. Supported now: `{subprogram}`. Reserved for later: `{brightness}`, `{language}`, `{theme}`, `{rotation}`.
+The controller substitutes placeholders before executing the command. Supported now:
+`{subprogram}` (any program), `{program}` (`system.transition` only, the display name
+of the program being switched to), and `{matrix_options}` (any program, expanded into
+the individual `--led-*` LED matrix hardware flags from the top-level `matrix:` config
+block — see `led_controller/config.py`'s `MatrixConfig`). Reserved for later:
+`{language}`, `{theme}`, `{rotation}`.
 
 If a command requests a subprogram that isn't defined in config, the request is rejected before any process starts (no state change) and an error is published.
 

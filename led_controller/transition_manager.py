@@ -55,16 +55,18 @@ class TransitionManager:
             self._foreground = None
 
     def _launch_idle(self) -> None:
-        self._foreground = self._proc.launch(self._config.system.idle)
+        command = self._config.render_command(self._config.system.idle)
+        self._foreground = self._proc.launch(command)
 
     def _resolve(self, program_id: str, subprogram_id: str | None) -> str:
         program = self._config.programs.get(program_id)
         if program is None:
             raise TransitionError(f"unknown program {program_id!r}")
         try:
-            return program.resolve_command(subprogram_id)
+            command = program.resolve_command(subprogram_id)
         except ConfigError as exc:
             raise TransitionError(str(exc)) from exc
+        return self._config.render_command(command)
 
     def _launch_program(self, program_id: str, subprogram_id: str | None) -> None:
         command = self._resolve(program_id, subprogram_id)
@@ -95,7 +97,10 @@ class TransitionManager:
             self._fail(program_id, subprogram_id, f"unknown program {program_id!r}")
             return
         self._sm.transition_to(State.SWITCHING)
-        self._proc.run_to_completion(self._config.system.resolve_transition_command(program.name))
+        transition_command = self._config.render_command(
+            self._config.system.resolve_transition_command(program.name)
+        )
+        self._proc.run_to_completion(transition_command)
         self._stop_foreground()
         try:
             self._launch_program(program_id, subprogram_id)
@@ -114,7 +119,7 @@ class TransitionManager:
 
     def shutdown(self) -> None:
         self._sm.transition_to(State.SHUTTING_DOWN)
-        self._proc.run_to_completion(self._config.system.shutdown)
+        self._proc.run_to_completion(self._config.render_command(self._config.system.shutdown))
         self._stop_foreground()
         self.active_program_id = None
         self.active_subprogram_id = None

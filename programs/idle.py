@@ -9,11 +9,10 @@ render loop must exit promptly on that signal rather than run forever.
 
 from __future__ import annotations
 
-import argparse
 import signal
 import time
 
-from matrix_options import add_matrix_arguments, build_matrix, graphics, load_font, text_width
+from matrix_program import SampleBase, graphics, load_font, text_width
 
 _stop = False
 
@@ -67,26 +66,25 @@ def draw_frame(canvas, label_font, clock_font, label: str) -> None:
     graphics.DrawText(canvas, clock_font, clock_x, clock_font.baseline, white, timestamp)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="LED matrix idle animation")
-    add_matrix_arguments(parser)
-    parser.add_argument("--label", default="IDLE", help="Text shown across the bottom of the screen")
-    args = parser.parse_args()
+class Idle(SampleBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parser.add_argument("--label", default="IDLE", help="Text shown across the bottom of the screen")
 
-    signal.signal(signal.SIGTERM, _handle_sigterm)
+    def run(self) -> None:
+        signal.signal(signal.SIGTERM, _handle_sigterm)
 
-    matrix = build_matrix(args)
-    label_font = load_font("6x13.bdf")
-    clock_font = load_font("4x6.bdf")
-    canvas = matrix.CreateFrameCanvas()
+        label_font = load_font("6x13.bdf")
+        clock_font = load_font("4x6.bdf")
+        canvas = self.matrix.CreateFrameCanvas()
 
-    while not _stop:
-        draw_frame(canvas, label_font, clock_font, args.label)
-        canvas = matrix.SwapOnVSync(canvas)
-        time.sleep(1)
+        while not _stop:
+            draw_frame(canvas, label_font, clock_font, self.args.label)
+            canvas = self.matrix.SwapOnVSync(canvas)
+            time.sleep(1)
 
-    matrix.Clear()
+        self.matrix.Clear()
 
 
 if __name__ == "__main__":
-    main()
+    Idle().process()

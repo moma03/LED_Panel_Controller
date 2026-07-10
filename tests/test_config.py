@@ -119,3 +119,70 @@ def test_resolve_transition_command_substitutes_program_name():
 def test_resolve_transition_command_without_placeholder_is_unchanged():
     system = SystemConfig(idle="a", transition="python3 transition.py", shutdown="c")
     assert system.resolve_transition_command("Weather") == "python3 transition.py"
+
+
+def test_matrix_block_defaults_to_empty(tmp_path):
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.matrix.options == {}
+    assert config.matrix.as_cli_args() == ""
+
+
+def test_matrix_block_is_loaded_verbatim(tmp_path):
+    text = VALID_YAML + (
+        "\nmatrix:\n"
+        "  rows: 64\n"
+        "  cols: 128\n"
+        "  chain_length: 2\n"
+        "  parallel: 2\n"
+        "  show_refresh_rate: true\n"
+    )
+    config = load_config(write(tmp_path, text))
+    assert config.matrix.options == {
+        "rows": 64,
+        "cols": 128,
+        "chain_length": 2,
+        "parallel": 2,
+        "show_refresh_rate": True,
+    }
+
+
+def test_unknown_matrix_option_raises_at_load_time(tmp_path):
+    text = VALID_YAML + "\nmatrix:\n  bogus_option: 1\n"
+    with pytest.raises(ConfigError):
+        load_config(write(tmp_path, text))
+
+
+def test_matrix_as_cli_args_expands_value_flags():
+    from led_controller.config import MatrixConfig
+
+    matrix = MatrixConfig(options={"rows": 64, "cols": 128, "chain_length": 2, "gpio_slowdown": 1})
+    assert matrix.as_cli_args() == "--led-rows=64 --led-cols=128 --led-chain=2 --led-slowdown-gpio=1"
+
+
+def test_matrix_as_cli_args_expands_boolean_flags():
+    from led_controller.config import MatrixConfig
+
+    matrix = MatrixConfig(options={"show_refresh_rate": True, "disable_hardware_pulsing": False})
+    assert matrix.as_cli_args() == "--led-show-refresh"
+
+
+def test_matrix_as_cli_args_inverted_boolean_only_fires_on_trigger_value():
+    from led_controller.config import MatrixConfig
+
+    assert MatrixConfig(options={"drop_privileges": False}).as_cli_args() == "--led-no-drop-privs"
+    assert MatrixConfig(options={"drop_privileges": True}).as_cli_args() == ""
+
+
+def test_render_command_substitutes_matrix_options_placeholder(tmp_path):
+    text = VALID_YAML.replace(
+        "command: python3 weather.py", "command: python3 weather.py {matrix_options}"
+    ) + "\nmatrix:\n  rows: 64\n  gpio_slowdown: 1\n"
+    config = load_config(write(tmp_path, text))
+    rendered = config.render_command(config.programs["weather"].command)
+    assert rendered == "python3 weather.py --led-rows=64 --led-slowdown-gpio=1"
+
+
+def test_render_command_without_placeholder_is_unchanged(tmp_path):
+    config = load_config(write(tmp_path, VALID_YAML + "\nmatrix:\n  rows: 64\n"))
+    assert config.render_command("python3 weather.py") == "python3 weather.py"
+
