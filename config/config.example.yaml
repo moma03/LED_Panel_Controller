@@ -4,6 +4,12 @@
 mqtt:
   host: localhost
   port: 1883
+  # Home Assistant's built-in Mosquitto broker add-on requires auth by default
+  # (it doesn't accept anonymous connections) — set these to a valid HA user
+  # or a dedicated MQTT user you create for the broker. Omit both if your
+  # broker allows anonymous connections.
+  # username: led-controller
+  # password: change-me
 
 relay:
   backend: mock  # "gpio" on the Pi, "mock" for local development

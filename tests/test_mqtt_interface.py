@@ -7,10 +7,37 @@ from led_controller.mqtt_interface import MQTTInterface
 from tests.conftest import FakeMQTTClient, make_config
 
 
-def build_interface():
-    client = FakeMQTTClient()
+def build_interface(connect_reason_code: int = 0):
+    client = FakeMQTTClient(connect_reason_code=connect_reason_code)
     q: "queue.Queue" = queue.Queue()
     return MQTTInterface(client, q), client
+
+
+def test_successful_connect_subscribes_to_control_topics():
+    mqtt, client = build_interface(connect_reason_code=0)
+    mqtt.start("localhost", 1883)
+    assert set(client.subscribed_topics) == {
+        "display/control/power_on",
+        "display/control/start",
+        "display/control/switch",
+        "display/control/stop",
+        "display/control/retry",
+        "display/control/shutdown",
+    }
+
+
+def test_failed_connect_does_not_subscribe(capsys):
+    mqtt, client = build_interface(connect_reason_code=5)  # 5 = Not authorized
+    mqtt.start("localhost", 1883)
+    assert client.subscribed_topics == []
+    assert "MQTT connection failed" in capsys.readouterr().err
+
+
+def test_publish_error_is_also_printed_to_stderr(capsys):
+    mqtt, client = build_interface()
+    mqtt.publish_error("something went wrong")
+    assert "something went wrong" in capsys.readouterr().err
+    assert ("display/errors", '{"message": "something went wrong"}', False) in client.published
 
 
 def discovery_messages(client):

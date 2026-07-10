@@ -44,6 +44,20 @@ def test_missing_file_raises_config_error(tmp_path):
         load_config(tmp_path / "does-not-exist.yaml")
 
 
+def test_mqtt_credentials_default_to_none(tmp_path):
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.mqtt_username is None
+    assert config.mqtt_password is None
+
+
+def test_mqtt_credentials_are_parsed(tmp_path):
+    text = VALID_YAML + "\nmqtt:\n  host: broker.local\n  username: led-controller\n  password: secret\n"
+    config = load_config(write(tmp_path, text))
+    assert config.mqtt_host == "broker.local"
+    assert config.mqtt_username == "led-controller"
+    assert config.mqtt_password == "secret"
+
+
 def test_missing_programs_raises(tmp_path):
     text = "system:\n  idle: a\n  transition: b\n  shutdown: c\n"
     with pytest.raises(ConfigError):

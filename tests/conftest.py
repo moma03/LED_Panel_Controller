@@ -45,19 +45,20 @@ class FakeMQTTMessage:
 class FakeMQTTClient:
     """Duck-types the subset of paho.mqtt.client.Client that MQTTInterface uses."""
 
-    def __init__(self):
+    def __init__(self, connect_reason_code: int = 0):
         self.on_connect = None
         self.on_message = None
         self.subscribed_topics: list[str] = []
         self.published: list[tuple[str, str, bool]] = []
         self.connected = False
+        self.connect_reason_code = connect_reason_code
 
     def connect(self, host: str, port: int) -> None:
         self.connected = True
 
     def loop_start(self) -> None:
         if self.on_connect:
-            self.on_connect(self, None, None, 0)
+            self.on_connect(self, None, None, self.connect_reason_code)
 
     def loop_stop(self) -> None:
         pass

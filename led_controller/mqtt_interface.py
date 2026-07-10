@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import queue
+import sys
 from typing import Protocol
 
 from .commands import Command
@@ -82,7 +83,10 @@ class MQTTInterface:
     def stop(self) -> None:
         self._client.loop_stop()
 
-    def _on_connect(self, *_args) -> None:
+    def _on_connect(self, _client, _userdata, _connect_flags, reason_code, _properties=None) -> None:
+        if reason_code != 0:
+            print(f"MQTT connection failed: {reason_code}", file=sys.stderr)
+            return
         for topic in _CONTROL_TOPIC_COMMANDS:
             self._client.subscribe(topic)
 
@@ -122,6 +126,7 @@ class MQTTInterface:
         self._client.publish(TOPIC_CURRENT, json.dumps(payload), retain=True)
 
     def publish_error(self, message: str) -> None:
+        print(f"[led-controller] {message}", file=sys.stderr)
         self._client.publish(TOPIC_ERRORS, json.dumps({"message": message}))
 
     def publish_discovery(self, config: AppConfig) -> None:

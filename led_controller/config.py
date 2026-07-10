@@ -74,6 +74,8 @@ class AppConfig:
     relay: RelayConfig
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
     process_terminate_timeout: float = 5.0
 
 
@@ -140,5 +142,7 @@ def load_config(path: str | Path) -> AppConfig:
         relay=_load_relay(raw.get("relay")),
         mqtt_host=mqtt_raw.get("host", "localhost"),
         mqtt_port=mqtt_raw.get("port", 1883),
+        mqtt_username=mqtt_raw.get("username"),
+        mqtt_password=mqtt_raw.get("password"),
         process_terminate_timeout=float(raw.get("process_terminate_timeout", 5.0)),
     )

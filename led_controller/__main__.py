@@ -28,6 +28,8 @@ def main() -> None:
         raise SystemExit(1) from exc
 
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    if config.mqtt_username:
+        client.username_pw_set(config.mqtt_username, config.mqtt_password)
     command_queue: "queue.Queue" = queue.Queue()
     mqtt_interface = MQTTInterface(client, command_queue)
     controller = DisplayController(config, mqtt_interface, command_queue)

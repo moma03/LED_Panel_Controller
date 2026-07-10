@@ -8,30 +8,36 @@ Home Assistant as the UI. See [setup.md](setup.md) for the full design.
 
 1. Clone with submodules (or run `git submodule update --init --recursive` if already cloned):
    ```
-   git clone --recurse-submodules <this repo>
+   git clone --recurse-submodules https://github.com/moma03/LED_Panel_Controller.git
    ```
    This pulls in [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix)
    under `third_party/rpi-rgb-led-matrix`, which the `idle`/`transition`/`shutdown`
    display programs in [`programs/`](programs/) use to draw on the matrix.
 
-2. Build and install its Python bindings (one-time, on the Pi itself — this compiles
+2. Create a Python virtual environment and activate it:
+   ```
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. Build and install its Python bindings (one-time, on the Pi itself — this compiles
    a C++ extension against the actual hardware headers, it isn't a pip package):
    ```
    cd third_party/rpi-rgb-led-matrix
-   make build-python PYTHON=$(which python3)
-   sudo make install-python PYTHON=$(which python3)
+   sudo apt-get update && sudo apt-get install python3-dev cython3 -y
+   pip install .
    ```
 
-3. Install the controller itself:
+4. Install the controller itself:
    ```
-   python3 -m venv .venv && source .venv/bin/activate
+   cd ../../
    pip install -e ".[dev]"
    ```
 
-4. Copy [`config/config.example.yaml`](config/config.example.yaml) to `config.yaml` and
+5. Copy [`config/config.example.yaml`](config/config.example.yaml) to `config.yaml` and
    adjust the relay pin, MQTT broker, and program list for your setup.
 
-5. Run it:
+6. Run it:
    ```
    python -m led_controller --config config.yaml
    ```
