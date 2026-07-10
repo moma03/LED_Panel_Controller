@@ -77,3 +77,19 @@ def test_switch_to_known_program_launches_it():
     assert sm.state == State.RUNNING
     assert tm.active_program_id == "ok"
     assert len(proc.launched) == 1
+
+
+def test_subprogram_ignored_for_program_without_subprograms():
+    # "ok" has no subprograms; a stray value (e.g. Home Assistant's subprogram select
+    # reporting "unknown" while untouched) must not leak into active_subprogram_id.
+    tm, sm, proc = build()
+    tm.switch("ok", "unknown")
+    assert sm.state == State.RUNNING
+    assert tm.active_subprogram_id is None
+
+
+def test_subprogram_kept_for_program_with_subprograms():
+    tm, sm, proc = build()
+    tm.switch("trainboard", "berlin")
+    assert sm.state == State.RUNNING
+    assert tm.active_subprogram_id == "berlin"

@@ -24,9 +24,16 @@ Home Assistant as the UI. See [setup.md](setup.md) for the full design.
    a C++ extension against the actual hardware headers, it isn't a pip package):
    ```
    cd third_party/rpi-rgb-led-matrix
-   sudo apt-get update && sudo apt-get install python3-dev cython3 -y
+   sudo apt-get update && sudo apt-get install python3-dev cython3 python3-pil -y
    pip install .
    ```
+   `python3-pil` matters even though this project doesn't use Pillow directly — the
+   bindings' `pillow.c` shim needs Pillow's private `Imaging.h` header, which PyPI's
+   `Pillow` wheel doesn't ship (headers-only, not part of the installed package) but
+   Raspberry Pi OS's `python3-pil` apt package does, straight into
+   `/usr/include/python3.11/` where the build already looks. Skip it and `pip install
+   .` fails with `fatal error: Imaging.h: No such file or directory`
+   ([hzeller/rpi-rgb-led-matrix#1869](https://github.com/hzeller/rpi-rgb-led-matrix/issues/1869)).
 
 4. Install the controller itself:
    ```

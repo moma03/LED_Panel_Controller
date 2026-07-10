@@ -72,7 +72,11 @@ class TransitionManager:
         command = self._resolve(program_id, subprogram_id)
         self._foreground = self._proc.launch(command)
         self.active_program_id = program_id
-        self.active_subprogram_id = subprogram_id
+        # A program with no subprograms has no such concept, no matter what a caller
+        # passed in -- e.g. Home Assistant's subprogram select reports "unknown" while
+        # untouched, and that shouldn't leak into display/current for e.g. Weather.
+        program = self._config.programs[program_id]
+        self.active_subprogram_id = subprogram_id if program.subprograms else None
 
     # -- sequences ---------------------------------------------------------
 
