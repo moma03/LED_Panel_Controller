@@ -16,7 +16,7 @@ Home Assistant as the UI. See [setup.md](setup.md) for the full design.
 
 2. Create a Python virtual environment and activate it:
    ```
-   python3 -m venv venv
+   python3 -m venv .venv
    source venv/bin/activate
    ```
 
