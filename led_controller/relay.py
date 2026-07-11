@@ -51,10 +51,10 @@ class GPIOZeroRelay:
         self._device = DigitalOutputDevice(pin, active_high=not active_low, initial_value=False)
 
     def on(self) -> None:
-        self._device.on()
+        self._device.off()
 
     def off(self) -> None:
-        self._device.off()
+        self._device.on()
 
     @property
     def is_on(self) -> bool:
