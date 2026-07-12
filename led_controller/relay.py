@@ -48,7 +48,7 @@ class GPIOZeroRelay:
     def __init__(self, pin: int, active_low: bool = False):
         from gpiozero import DigitalOutputDevice
 
-        self._device = DigitalOutputDevice(pin, active_high=not active_low, initial_value=True)
+        self._device = DigitalOutputDevice(pin) #, active_high=not active_low, initial_value=True)
 
     def on(self) -> None:
         print(f"GPIOZeroRelay: turning on pin {self._device.pin}")
