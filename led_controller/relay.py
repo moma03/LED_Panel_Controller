@@ -47,8 +47,8 @@ class GPIOZeroRelay:
 
     def __init__(self, pin: int, active_low: bool = False):
         from gpiozero import DigitalOutputDevice
-
-        self._device = DigitalOutputDevice(pin) #, active_high=not active_low, initial_value=True)
+        print(f"GPIOZeroRelay: initializing pin {pin} (active_low={active_low})")
+        self._device = DigitalOutputDevice(pin, active_high=not active_low, initial_value=True)
 
     def on(self) -> None:
         print(f"GPIOZeroRelay: turning on pin {self._device.pin}")
@@ -64,6 +64,7 @@ class GPIOZeroRelay:
 
 
 def build_relay(backend: str, pin: int, active_low: bool = False) -> RelayController:
-    if backend == "gpio":
+    print(f"build_relay: backend={backend}, pin={pin}, active_low={active_low}")
+    if backend == "gpiosa":
         return GPIOZeroRelay(pin, active_low)
     return MockRelay()
