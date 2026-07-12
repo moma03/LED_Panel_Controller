@@ -65,6 +65,6 @@ class GPIOZeroRelay:
 
 def build_relay(backend: str, pin: int, active_low: bool = False) -> RelayController:
     print(f"build_relay: backend={backend}, pin={pin}, active_low={active_low}")
-    if backend == "gpiosa":
+    if backend == "gpio":
         return GPIOZeroRelay(pin, active_low)
     return MockRelay()
