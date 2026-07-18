@@ -75,3 +75,18 @@ programs:
         name: Hamburg Hbf
       paderborn:
         name: Paderborn Hbf
+
+  # db-display (https://github.com/moma03/db-display) reads its own --eva flag,
+  # falling back to config.json's "database.eva" when it's not given -- see
+  # LoadConfigWithCliOverrides's --led-* equivalent for the matrix options. The
+  # subprogram id doubles as the station's EVA number here since db-display
+  # only cares about that raw value, not a name -- {subprogram} works with any
+  # opaque id, it doesn't have to be a slug like trainboard's above.
+  db_display:
+    name: Train Departures
+    command: /path/to/db-display/db_display --eva {subprogram}
+    subprograms:
+      "8000297":
+        name: Frankfurt Hbf
+      "8000105":
+        name: Berlin Hbf
