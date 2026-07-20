@@ -13,11 +13,39 @@
   settling into a stable idle state -> renamed to "reset" (display/control/reset,
   button.led_display_reset); it now force-quits the foreground, clears the error, and
   goes to IDLE instead of relaunching.
-- [not reproduced] idle/shutdown font loading path -> traced through matrix_program.py's
-  FONTS_DIR resolution and confirmed fonts load correctly regardless of invocation cwd;
-  hardened it to use an absolute path anyway (was relative-but-consistent before).
+- [diagnosed, deployment not code] idle/shutdown font loading path -> code was actually
+  fine (hardened it to use an absolute path anyway). Real cause on the Pi: running the
+  controller from /root (mode 700) + rpi-rgb-led-matrix's default drop_privileges=true
+  dropping root to the "daemon" user right after GPIO init, before font loading -- daemon
+  can't traverse into /root at all. Fix: move the checkout out of /root, or set
+  matrix.drop_privileges: false in config.yaml.
 
 - known pre-existing bug (unrelated, flagged separately): the Start button's MQTT
   command_template reads from select.led_display_controller_program/subprogram, but the
   actual configured entity_id is select.led_display_program/subprogram -- the button
   always sends null program/subprogram. See spawned task.
+
+- [fixed] shutdown routine freezes -> shutdown animation was launched via
+  run_to_completion() BEFORE the current foreground (idle/active program) was stopped,
+  so two processes fought over the matrix hardware and the animation hung forever.
+  Reordered: stop foreground -> play animation -> relay off. Same bug class as the old
+  switch animation hang.
+- [fixed] want Ctrl+C / SIGTERM (daemon mode) to just stop the program + turn off the
+  relay -> added TransitionManager.emergency_stop(), wired into
+  DisplayController.run_forever()'s finally block. Skips the goodbye animation
+  entirely (unlike the MQTT `shutdown` command) so the process exits promptly.
+- [added] emergency restart from Home Assistant without SSH, + auto-start on boot ->
+  deploy/led-panel-controller.service (systemd, auto-start + Restart=on-failure) and a
+  separate deploy/led-panel-emergency-restart.service watchdog (independent process,
+  no dependency on the controller's code/venv) that listens on MQTT
+  (display/control/emergency_restart) and force-restarts the controller via
+  `systemctl restart` -- this is what actually recovers a *hung* (not crashed)
+  process, since Restart=on-failure only fires once a process has exited on its own.
+  Publishes its own HA discovery button, button.led_display_emergency_restart. See
+  deploy/README.md.
+- [fixed] subprogram (and program) `name` had no effect on what Home Assistant showed
+  -> the select entities' options were the raw config ids, not `name`. Now show `name`;
+  Program.resolve_subprogram / AppConfig.resolve_program accept either the id or the
+  name and always resolve to the same program/subprogram id for the actual
+  {subprogram} substitution. Config load now rejects duplicate program/subprogram
+  names since the dropdowns resolve by name.

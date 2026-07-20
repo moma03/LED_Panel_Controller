@@ -31,15 +31,30 @@ class Program:
     command: str
     subprograms: dict[str, Subprogram] = field(default_factory=dict)
 
+    def resolve_subprogram(self, key: str | None) -> Subprogram | None:
+        """Looks up a subprogram by its id (the subprograms: dict key) or by its
+        display `name` -- Home Assistant's select shows the friendly name rather than
+        the raw id (see mqtt_interface.py's _select_configs), so whichever one an MQTT
+        client actually sends back must resolve to the same subprogram."""
+        if key is None:
+            return None
+        if key in self.subprograms:
+            return self.subprograms[key]
+        for subprogram in self.subprograms.values():
+            if subprogram.name == key:
+                return subprogram
+        return None
+
     def resolve_command(self, subprogram_id: str | None) -> str:
         """Substitute the {subprogram} placeholder, rejecting unknown subprograms."""
         if "{subprogram}" not in self.command:
             return self.command
-        if subprogram_id is None or subprogram_id not in self.subprograms:
+        subprogram = self.resolve_subprogram(subprogram_id)
+        if subprogram is None:
             raise ConfigError(
                 f"program '{self.id}' requires a known subprogram, got {subprogram_id!r}"
             )
-        return self.command.replace("{subprogram}", subprogram_id)
+        return self.command.replace("{subprogram}", subprogram.id)
 
 
 @dataclass(frozen=True)
@@ -145,6 +160,18 @@ class AppConfig:
             return command
         return command.replace("{matrix_options}", self.matrix.as_cli_args())
 
+    def resolve_program(self, key: str | None) -> Program | None:
+        """Looks up a program by its id (the programs: dict key) or by its display
+        `name` -- same reasoning as Program.resolve_subprogram above."""
+        if key is None:
+            return None
+        if key in self.programs:
+            return self.programs[key]
+        for program in self.programs.values():
+            if program.name == key:
+                return program
+        return None
+
 
 def _load_subprograms(raw: dict, program_id: str) -> dict[str, Subprogram]:
     subprograms: dict[str, Subprogram] = {}
@@ -169,7 +196,24 @@ def _load_programs(raw: dict) -> dict[str, Program]:
             command=prog_raw["command"],
             subprograms=_load_subprograms(prog_raw.get("subprograms"), prog_id),
         )
+    _check_unique_names(
+        [p.name for p in programs.values()],
+        "program 'name' values must be unique -- Home Assistant's program select resolves by name",
+    )
+    _check_unique_names(
+        [sub.name for p in programs.values() for sub in p.subprograms.values()],
+        "subprogram 'name' values must be unique across all programs -- Home Assistant's "
+        "subprogram select is a single dropdown shared by every program and resolves by name",
+    )
     return programs
+
+
+def _check_unique_names(names: list[str], message: str) -> None:
+    seen = set()
+    for name in names:
+        if name in seen:
+            raise ConfigError(f"{message} (duplicate: {name!r})")
+        seen.add(name)
 
 
 def _load_system(raw: dict) -> SystemConfig:

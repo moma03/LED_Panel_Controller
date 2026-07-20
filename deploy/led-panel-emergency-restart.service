@@ -1,0 +1,35 @@
+# Standalone MQTT-triggered watchdog for led-panel-controller.service. Deliberately a
+# separate service/process from the controller itself -- if the controller is what's
+# hung, it can't act on its own MQTT commands (its single dispatch loop is what's
+# stuck), so the thing that force-restarts it has to live outside it.
+#
+# Install:
+#   sudo cp deploy/led-panel-emergency-restart.service /etc/systemd/system/
+#   sudo cp deploy/emergency-restart-watchdog.sh deploy/restart-controller.sh /opt/led-panel-controller/deploy/
+#   sudo chmod +x /opt/led-panel-controller/deploy/*.sh
+#   # only if your broker needs credentials or isn't on localhost:1883 --
+#   # see led-panel-emergency-restart.env.example in this directory:
+#   sudo cp deploy/led-panel-emergency-restart.env.example /etc/led-panel-emergency-restart.env
+#   sudo $EDITOR /etc/led-panel-emergency-restart.env
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now led-panel-emergency-restart.service
+#
+# Then in Home Assistant: button.led_display_emergency_restart appears automatically
+# via MQTT Discovery, same device as the rest of the LED Display Controller entities.
+
+[Unit]
+Description=LED Panel Controller Emergency Restart Watchdog
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/led-panel-controller/deploy/emergency-restart-watchdog.sh
+EnvironmentFile=-/etc/led-panel-emergency-restart.env
+Restart=always
+RestartSec=5
+# Needs root to run `systemctl restart led-panel-controller.service`.
+User=root
+
+[Install]
+WantedBy=multi-user.target

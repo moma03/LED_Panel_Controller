@@ -81,6 +81,63 @@ def test_resolve_command_substitutes_subprogram(tmp_path):
     assert command == "python3 trainboard.py --station berlin"
 
 
+def test_resolve_command_accepts_subprogram_display_name(tmp_path):
+    # Home Assistant's subprogram select shows the display name, not the config id --
+    # the command still needs to substitute the id ("berlin"), not the name.
+    config = load_config(write(tmp_path, VALID_YAML))
+    command = config.programs["trainboard"].resolve_command("Berlin Hbf")
+    assert command == "python3 trainboard.py --station berlin"
+
+
+def test_resolve_program_by_id_or_display_name(tmp_path):
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.resolve_program("weather").id == "weather"
+    assert config.resolve_program("Weather").id == "weather"
+    assert config.resolve_program("nonexistent") is None
+
+
+def test_duplicate_program_names_raise(tmp_path):
+    text = """
+system:
+  idle: a
+  shutdown: c
+
+programs:
+  weather:
+    name: Display
+    command: python3 weather.py
+  clock:
+    name: Display
+    command: python3 clock.py
+"""
+    with pytest.raises(ConfigError):
+        load_config(write(tmp_path, text))
+
+
+def test_duplicate_subprogram_names_across_programs_raise(tmp_path):
+    text = """
+system:
+  idle: a
+  shutdown: c
+
+programs:
+  trainboard:
+    name: Train Board
+    command: python3 trainboard.py --station {subprogram}
+    subprograms:
+      berlin:
+        name: Central
+  busboard:
+    name: Bus Board
+    command: python3 busboard.py --stop {subprogram}
+    subprograms:
+      hbf:
+        name: Central
+"""
+    with pytest.raises(ConfigError):
+        load_config(write(tmp_path, text))
+
+
 def test_resolve_command_rejects_unknown_subprogram(tmp_path):
     config = load_config(write(tmp_path, VALID_YAML))
     with pytest.raises(ConfigError):

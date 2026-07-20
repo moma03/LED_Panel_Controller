@@ -15,12 +15,14 @@ class RecordingProcessManager:
         self.launched: list[str] = []
         self.run_to_completion_calls: list[str] = []
         self.terminated: list[str] = []
+        self.calls: list[str] = []  # ordered log across launch/terminate/run_to_completion
         self._next_id = 0
 
     def launch(self, command: str) -> str:
         self._next_id += 1
         handle = f"handle-{self._next_id}"
         self.launched.append(command)
+        self.calls.append(f"launch:{command}")
         return handle
 
     def poll(self, _handle: str):
@@ -28,9 +30,11 @@ class RecordingProcessManager:
 
     def terminate(self, handle: str, _timeout: float) -> None:
         self.terminated.append(handle)
+        self.calls.append(f"terminate:{handle}")
 
     def run_to_completion(self, command: str) -> int:
         self.run_to_completion_calls.append(command)
+        self.calls.append(f"run_to_completion:{command}")
         return 0
 
 
@@ -101,3 +105,43 @@ def test_reset_does_not_relaunch_the_failed_program():
     tm.last_error = LastError(program_id="fail", subprogram_id=None, message="boom")
     tm.reset()
     assert all("fail" not in cmd for cmd in proc.launched)
+
+
+def test_shutdown_stops_foreground_before_playing_the_animation():
+    # The animation and the foreground program both need the matrix hardware, which
+    # only one process can hold at a time -- running the animation while the old
+    # foreground was still up made it hang forever waiting for a handle that was
+    # never coming. The foreground must be stopped first.
+    tm, sm, proc = build(initial=State.IDLE)
+    tm.start("ok", None)
+    proc.calls.clear()
+
+    tm.shutdown()
+    terminate_index = proc.calls.index("terminate:handle-1")
+    animation_index = next(i for i, c in enumerate(proc.calls) if c.startswith("run_to_completion:"))
+    assert terminate_index < animation_index
+    assert sm.state == State.OFF
+
+
+def test_shutdown_turns_off_the_relay():
+    tm, sm, proc = build(initial=State.IDLE)
+    tm._relay.on()
+    tm.shutdown()
+    assert tm._relay.is_on is False
+
+
+def test_emergency_stop_stops_foreground_and_turns_off_relay():
+    tm, sm, proc = build(initial=State.IDLE)
+    tm.start("ok", None)
+    tm._relay.on()
+
+    tm.emergency_stop()
+    assert proc.terminated == ["handle-1"]
+    assert tm._relay.is_on is False
+
+
+def test_emergency_stop_is_safe_to_call_with_nothing_running():
+    tm, sm, proc = build(initial=State.OFF)
+    tm.emergency_stop()  # must not raise
+    assert proc.terminated == []
+    assert tm._relay.is_on is False

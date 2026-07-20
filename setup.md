@@ -103,11 +103,19 @@ Commands received while busy are discarded, not buffered. This keeps behavior de
 
 The controller publishes available programs, current state, current program/subprogram, progress, and errors. Home Assistant renders a program dropdown, subprogram dropdown, start/stop/shutdown buttons, status, and a progress indicator — and disables any control not valid for the reported state.
 
+The program/subprogram dropdowns show each entry's display `name` (e.g. "Train Board", "Berlin Hbf"), not its config id (`trainboard`, `berlin`) — MQTT `select` options are plain strings with no separate label, so whatever the dropdown shows is also what gets sent back. The controller accepts either the id or the name for `start`'s `program`/`subprogram` fields and resolves both to the same program/subprogram (see `Program.resolve_subprogram` / `AppConfig.resolve_program`), and always substitutes the underlying id into `{subprogram}` in the program's command — never the display name. Because the subprogram dropdown is a single global list shared by every program, `name` values must be unique across all programs' subprograms (and all program names must be unique too) — the controller fails fast at config load if they aren't.
+
 ## MQTT Topics
 
 **Publishes:** `display/programs`, `display/status`, `display/current`, `display/errors`
 
 **Subscribes:** `display/control/power_on`, `display/control/start`, `display/control/stop`, `display/control/reset`, `display/control/shutdown`
+
+`display/control/emergency_restart` is a separate topic, handled by an independent
+watchdog process rather than the controller itself — see `deploy/README.md`. It
+force-restarts the controller's own OS process/service, so it's the one command
+that works even if the controller's main loop is hung and can't process any of the
+topics above.
 
 ## Relay Control
 
@@ -119,9 +127,20 @@ GPIO pin. Boards wired active-low need `relay.active_low: true` in config.yaml s
 reverse — see `led_controller/relay.py`.
 
 ```
-RUNNING → Shutdown command → shutdown animation → stop active program
+RUNNING → Shutdown command → stop active program → shutdown animation
         → disable PSU relay → OFF
 ```
+
+The active program is stopped *before* the shutdown animation runs, not after —
+rpi-rgb-led-matrix's hardware handle can only be held by one process at a time, so
+starting the animation while the previous program still held it hung forever
+waiting for a handle that was never coming.
+
+The controller process exiting for any other reason (Ctrl+C during development,
+SIGTERM from systemd when running as a daemon in production) skips the animation
+entirely: it stops the active program and de-energizes the relay immediately via
+`TransitionManager.emergency_stop()`, then exits. It does not run the MQTT `shutdown`
+command's full sequence — the goal there is exiting promptly, not showing a message.
 
 ## Error Handling
 

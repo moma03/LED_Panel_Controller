@@ -49,3 +49,13 @@ cards:
         entity: button.led_display_shutdown
         name: Shutdown
         icon: mdi:power-off
+
+  # Force-restarts the whole controller process/service, independent of whether it's
+  # currently responding -- see ../deploy/README.md. Kept as its own card, away from
+  # the normal controls above, with a confirmation prompt since it's disruptive.
+  - type: button
+    entity: button.led_display_emergency_restart
+    name: Emergency Restart
+    icon: mdi:restart-alert
+    confirmation:
+      text: Force-restart the LED controller process?

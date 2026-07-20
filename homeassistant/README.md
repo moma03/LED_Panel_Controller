@@ -25,10 +25,19 @@ them within a few seconds under one device, **LED Display Controller**:
 
 - `sensor.led_display_status`, `sensor.led_display_current_program`,
   `sensor.led_display_current_subprogram`, `sensor.led_display_last_error`
-- `select.led_display_program`, `select.led_display_subprogram` — options generated
-  from the controller's `programs:`/`subprograms:` config
+- `select.led_display_program`, `select.led_display_subprogram` — options are the
+  display `name` of each program/subprogram from the controller's config (e.g. "Train
+  Board", "Berlin Hbf"), not the config id (`trainboard`, `berlin`); the controller
+  resolves either one back to the right program, so `name` just has to be unique
 - `button.led_display_power_on`, `button.led_display_start_program`,
   `button.led_display_stop`, `button.led_display_reset`, `button.led_display_shutdown`
+
+There's also `button.led_display_emergency_restart`, published separately by a
+standalone watchdog rather than the controller itself — see
+[`../deploy/README.md`](../deploy/README.md). It force-restarts the whole controller
+process (via systemd) and works even if the controller is completely hung, which is
+the point: the controller's own buttons above are handled by the same process that
+might be stuck.
 
 Editing `programs:` in the controller's `config.yaml` and restarting the controller
 re-publishes the discovery configs, so the `select` option lists stay current

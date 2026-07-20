@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .commands import State
-from .config import AppConfig, ConfigError
+from .config import AppConfig, ConfigError, Program
 from .process_manager import ProcessHandle, ProcessManager
 from .relay import RelayController
 from .state_machine import StateMachine
@@ -58,25 +58,31 @@ class TransitionManager:
         command = self._config.render_command(self._config.system.idle)
         self._foreground = self._proc.launch(command)
 
-    def _resolve(self, program_id: str, subprogram_id: str | None) -> str:
-        program = self._config.programs.get(program_id)
+    def _resolve(self, program_id: str, subprogram_id: str | None) -> tuple[Program, str]:
+        # program_id/subprogram_id may be either the config id or the display `name`
+        # -- Home Assistant's selects show the name, other MQTT clients may send the
+        # id directly, and Program/AppConfig.resolve_* accept either.
+        program = self._config.resolve_program(program_id)
         if program is None:
             raise TransitionError(f"unknown program {program_id!r}")
         try:
             command = program.resolve_command(subprogram_id)
         except ConfigError as exc:
             raise TransitionError(str(exc)) from exc
-        return self._config.render_command(command)
+        return program, self._config.render_command(command)
 
     def _launch_program(self, program_id: str, subprogram_id: str | None) -> None:
-        command = self._resolve(program_id, subprogram_id)
+        program, command = self._resolve(program_id, subprogram_id)
         self._foreground = self._proc.launch(command)
-        self.active_program_id = program_id
+        self.active_program_id = program.id
         # A program with no subprograms has no such concept, no matter what a caller
         # passed in -- e.g. Home Assistant's subprogram select reports "unknown" while
         # untouched, and that shouldn't leak into display/current for e.g. Weather.
-        program = self._config.programs[program_id]
-        self.active_subprogram_id = subprogram_id if program.subprograms else None
+        # Canonicalize to the subprogram's id (not whatever the caller sent) so
+        # display/current is consistent regardless of whether the caller sent an id
+        # or a display name.
+        resolved_subprogram = program.resolve_subprogram(subprogram_id)
+        self.active_subprogram_id = resolved_subprogram.id if resolved_subprogram else None
 
     # -- sequences ---------------------------------------------------------
 
@@ -109,12 +115,29 @@ class TransitionManager:
 
     def shutdown(self) -> None:
         self._sm.transition_to(State.SHUTTING_DOWN)
-        self._proc.run_to_completion(self._config.render_command(self._config.system.shutdown))
+        # Stop whatever's on the matrix *before* running the shutdown animation --
+        # rpi-rgb-led-matrix owns the hardware exclusively, so launching the shutdown
+        # animation while the idle/active program still has it initialized (RGBMatrix
+        # is a singleton-ish hardware resource, not something two processes can share)
+        # left the animation process hanging forever waiting for a hardware handle
+        # that was never coming. Same class of bug the old SWITCH command had.
         self._stop_foreground()
         self.active_program_id = None
         self.active_subprogram_id = None
+        self._proc.run_to_completion(self._config.render_command(self._config.system.shutdown))
         self._relay.off()
         self._sm.transition_to(State.OFF)
+
+    def emergency_stop(self) -> None:
+        """Called when the controller process itself is exiting (Ctrl+C, SIGTERM from
+        systemd) rather than via an MQTT Shutdown command -- stops whatever's in the
+        foreground and de-energizes the relay immediately, skipping the goodbye
+        animation entirely so the process can exit right away instead of blocking on
+        one more subprocess. Safe to call redundantly (e.g. after a normal shutdown()
+        already ran): stopping an already-stopped foreground and switching an
+        already-off relay off again are both no-ops."""
+        self._stop_foreground()
+        self._relay.off()
 
     def poll_foreground(self) -> int | None:
         """Returns the foreground process's exit code if it has ended, else None."""

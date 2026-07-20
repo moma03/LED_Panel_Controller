@@ -189,13 +189,18 @@ class MQTTInterface:
         ]
 
     def _select_configs(self, config: AppConfig):
-        subprogram_ids = sorted(
-            {sub_id for program in config.programs.values() for sub_id in program.subprograms}
+        # Options show the configured display `name`, not the raw config id -- the
+        # controller resolves either back to the right program/subprogram (see
+        # Program.resolve_subprogram / AppConfig.resolve_program), so the pending
+        # selects can just retain whatever string these options show without any
+        # separate id<->name translation happening in Home Assistant itself.
+        subprogram_names = sorted(
+            {sub.name for program in config.programs.values() for sub in program.subprograms.values()}
         )
         return [
             ("program", {
                 "name": "Program",
-                "options": list(config.programs.keys()),
+                "options": [program.name for program in config.programs.values()],
                 "command_topic": TOPIC_PENDING_PROGRAM,
                 "state_topic": TOPIC_PENDING_PROGRAM,
                 "retain": True,
@@ -203,7 +208,7 @@ class MQTTInterface:
             }),
             ("subprogram", {
                 "name": "Subprogram",
-                "options": ["none"] + subprogram_ids,
+                "options": ["none"] + subprogram_names,
                 "command_topic": TOPIC_PENDING_SUBPROGRAM,
                 "state_topic": TOPIC_PENDING_SUBPROGRAM,
                 "retain": True,

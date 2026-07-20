@@ -152,6 +152,24 @@ def test_invalid_command_is_rejected_and_published():
     assert any("rejected" in e["message"] for e in errors)
 
 
+def test_run_forever_stops_foreground_and_relay_on_exit():
+    # Ctrl+C / SIGTERM (request_stop()) must leave the display program stopped and
+    # the PSU relay off, whether the controller is run interactively during
+    # development or as a systemd daemon in production -- not just abandon the loop.
+    from led_controller.commands import Command
+
+    controller, _, q = build_controller()
+    send(q, Command.POWER_ON)
+    controller.step(timeout=0.1)
+    send(q, Command.START, {"program": "ok"})
+    controller.step(timeout=0.1)
+    assert controller._tm._relay.is_on is True
+
+    controller.request_stop()
+    controller.run_forever()
+    assert controller._tm._relay.is_on is False
+
+
 def test_unknown_program_is_reported_as_transition_error():
     from led_controller.commands import Command
 

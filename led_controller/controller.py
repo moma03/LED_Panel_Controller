@@ -60,11 +60,18 @@ class DisplayController:
         self._stop_event.set()
 
     def run_forever(self) -> None:
+        """Runs until asked to stop (Ctrl+C / SIGTERM -> request_stop(), see __main__.py),
+        whether that's an interactive `python -m led_controller` session during
+        development or a systemd service running indefinitely in production. Either
+        way, the process exiting always stops the foreground program and de-energizes
+        the relay -- see TransitionManager.emergency_stop() -- rather than leaving a
+        display program orphaned and the PSU powered."""
         self.start()
         try:
             while not self._stop_event.is_set():
                 self.step()
         finally:
+            self._tm.emergency_stop()
             self._mqtt.stop()
 
     def step(self, timeout: float = 0.5) -> None:

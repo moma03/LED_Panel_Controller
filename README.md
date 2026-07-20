@@ -48,6 +48,10 @@ Home Assistant as the UI. See [setup.md](setup.md) for the full design.
    ```
    python -m led_controller --config config.yaml
    ```
+   Stop it with Ctrl+C (or `SIGTERM`, e.g. `systemctl stop` if you run it as a
+   systemd service) — either way it stops the active display program and switches
+   the PSU relay off before exiting, so it's safe to run indefinitely as a daemon
+   and safe to interrupt during development.
 
 **`rgbmatrix` must be installed into the exact interpreter that runs these scripts.**
 Two ways this bites people:
@@ -122,6 +126,12 @@ producing a broken command on the Pi.
 
 These can only be run on the Pi with the matrix connected and rgbmatrix
 installed — there's no way to render them on a dev machine, so verify them on-device.
+
+## Running as a daemon
+
+See [`deploy/README.md`](deploy/README.md) for systemd units that start the
+controller on boot and an independent MQTT-triggered watchdog for force-restarting it
+from Home Assistant if it ever gets stuck — no SSH needed.
 
 ## Testing
 

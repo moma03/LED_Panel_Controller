@@ -1,0 +1,32 @@
+# Runs the controller as a daemon: starts automatically on boot, restarts on its own
+# after a crash. This does NOT recover from a *hang* (a process that's still alive but
+# stuck) -- for that, see emergency-restart-watchdog.sh / led-panel-emergency-restart.service
+# in this directory, which force-restart the service on demand from Home Assistant.
+#
+# Install:
+#   sudo cp deploy/led-panel-controller.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now led-panel-controller.service
+#
+# Adjust WorkingDirectory/ExecStart below to match where you actually checked out the
+# repo and created the venv. Don't use /root -- see README.md's troubleshooting notes
+# on rpi-rgb-led-matrix's drop_privileges dropping to a user that can't read files
+# under /root once the display programs are running.
+
+[Unit]
+Description=LED Panel Controller
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/led-panel-controller
+ExecStart=/opt/led-panel-controller/venv/bin/python3 -m led_controller --config /opt/led-panel-controller/config.yaml
+Restart=on-failure
+RestartSec=2
+# rpi-rgb-led-matrix needs root to access the GPIO/DMA registers directly (it drops to
+# drop_priv_user/drop_priv_group itself once the hardware is initialized -- see setup.md).
+User=root
+
+[Install]
+WantedBy=multi-user.target

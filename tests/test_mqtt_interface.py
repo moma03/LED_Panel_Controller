@@ -72,18 +72,18 @@ def test_discovery_messages_are_retained():
     assert all(retain for _, _, retain in discovery_messages(client))
 
 
-def test_program_select_options_come_from_config():
+def test_program_select_options_show_display_names_not_ids():
     mqtt, client = build_interface()
     mqtt.publish_discovery(make_config())
     _, payload, _ = next(m for m in discovery_messages(client) if "select/led_display_controller/program/" in m[0])
-    assert set(payload["options"]) == {"ok", "fail", "trainboard"}
+    assert set(payload["options"]) == {"OK", "Fail", "Train Board"}
 
 
-def test_subprogram_select_options_come_from_config():
+def test_subprogram_select_options_show_display_names_not_ids():
     mqtt, client = build_interface()
     mqtt.publish_discovery(make_config())
     _, payload, _ = next(m for m in discovery_messages(client) if "select/led_display_controller/subprogram" in m[0])
-    assert set(payload["options"]) == {"none", "berlin"}
+    assert set(payload["options"]) == {"none", "Berlin Hbf"}
 
 
 def test_all_entities_share_the_same_device():
