@@ -4,7 +4,7 @@
 # Like running new display code on a panel bypassing the controller, or testing the panel's power supply and relay wiring.
 #
 # Usage: ./manual_relay_off.sh [PIN]
-#   PIN - BCM GPIO number to drive (default: 21, i.e. physical header pin 40)
+#   PIN - BCM GPIO number to drive (default: 0, i.e. physical header pin 27)
 #
 # Uses pinctrl (or raspi-gpio as a fallback on older Raspberry Pi OS versions) to
 # set the pin as an output and drive it LOW directly. This is a standalone
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-PIN="${1:-21}"
+PIN="${1:-0}"
 
 if ! [[ "$PIN" =~ ^[0-9]+$ ]]; then
     echo "PIN must be a non-negative integer (BCM numbering), got: $PIN" >&2
