@@ -6,10 +6,11 @@
 # Usage: ./manual_relay_on.sh [PIN]
 #   PIN - BCM GPIO number to drive (default: 21, i.e. physical header pin 40)
 #
-# Uses raspi-gpio, which ships with Raspberry Pi OS, to set the pin as an output
-# and drive it HIGH directly. This is a standalone one-shot register write, not a
-# running process, so the level is held after the script exits — no Python, no
-# venv, and no dependency on anything else in this project.
+# Uses pinctrl (or raspi-gpio as a fallback on older Raspberry Pi OS versions) to
+# set the pin as an output and drive it HIGH directly. This is a standalone
+# one-shot register write, not a running process, so the level is held after the
+# script exits — no Python, no venv, and no dependency on anything else in this
+# project.
 #
 # Note: this assumes an active-high relay (HIGH = energized). If your relay
 # module is active-low, HIGH will actually turn it off — in that case use
@@ -24,12 +25,19 @@ if ! [[ "$PIN" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-if ! command -v raspi-gpio >/dev/null 2>&1; then
-    echo "raspi-gpio not found. Install it with: sudo apt install raspi-gpio" >&2
+if command -v pinctrl >/dev/null 2>&1; then
+    GPIO_TOOL=pinctrl
+elif command -v raspi-gpio >/dev/null 2>&1; then
+    GPIO_TOOL=raspi-gpio
+else
+    echo "Neither pinctrl nor raspi-gpio found. Install with: sudo apt install raspi-gpio" >&2
     exit 1
 fi
 
-raspi-gpio set "$PIN" op dh
+"$GPIO_TOOL" set "$PIN" op dh
 
-echo "GPIO${PIN} set as output, driven HIGH."
+echo "GPIO${PIN} set as output, driven HIGH (via $GPIO_TOOL)."
 echo "Relay should now be ON (if active-high) or OFF (if active-low)."
+echo
+echo "Readback:"
+"$GPIO_TOOL" get "$PIN"
