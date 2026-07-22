@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import time
 
 from led_controller.process_manager import ProcessManager
@@ -46,3 +47,21 @@ def test_terminate_force_kills_after_timeout():
 def test_run_to_completion_returns_exit_code():
     pm = ProcessManager()
     assert pm.run_to_completion(NOOP_CMD) == 0
+
+
+def _check_cwd_cmd(expected: str) -> str:
+    return f'{sys.executable} -c "import os,sys; sys.exit(0 if os.getcwd() == sys.argv[1] else 1)" {expected}'
+
+
+def test_launch_respects_explicit_cwd(tmp_path):
+    # Program commands are relative paths (e.g. "programs/idle.py") by convention --
+    # they must be resolved against the cwd passed in here, not whatever cwd this
+    # process itself happens to be running with.
+    pm = ProcessManager()
+    handle = pm.launch(_check_cwd_cmd(str(tmp_path)), cwd=tmp_path)
+    assert handle.popen.wait(timeout=5) == 0
+
+
+def test_run_to_completion_respects_explicit_cwd(tmp_path):
+    pm = ProcessManager()
+    assert pm.run_to_completion(_check_cwd_cmd(str(tmp_path)), cwd=tmp_path) == 0

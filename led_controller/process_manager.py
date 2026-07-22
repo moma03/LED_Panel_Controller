@@ -12,6 +12,7 @@ import signal
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -21,8 +22,8 @@ class ProcessHandle:
 
 
 class ProcessManager:
-    def launch(self, command: str) -> ProcessHandle:
-        popen = subprocess.Popen(shlex.split(command))
+    def launch(self, command: str, cwd: str | Path | None = None) -> ProcessHandle:
+        popen = subprocess.Popen(shlex.split(command), cwd=cwd)
         return ProcessHandle(command=command, popen=popen)
 
     def poll(self, handle: ProcessHandle) -> int | None:
@@ -43,6 +44,6 @@ class ProcessManager:
             handle.popen.kill()
             handle.popen.wait()
 
-    def run_to_completion(self, command: str) -> int:
+    def run_to_completion(self, command: str, cwd: str | Path | None = None) -> int:
         """Runs a short-lived command (e.g. a transition animation) and blocks until it exits."""
-        return subprocess.run(shlex.split(command)).returncode
+        return subprocess.run(shlex.split(command), cwd=cwd).returncode

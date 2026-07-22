@@ -19,6 +19,14 @@
   dropping root to the "daemon" user right after GPIO init, before font loading -- daemon
   can't traverse into /root at all. Fix: move the checkout out of /root, or set
   matrix.drop_privileges: false in config.yaml.
+- [fixed] idle/shutdown screens didn't show at all when run as a systemd service ->
+  program commands ("python3 programs/idle.py") are relative paths, resolved against
+  whatever cwd the *controller process* happened to have -- fine in a manually-started
+  shell from the repo root, silently broken under systemd unless WorkingDirectory
+  exactly matched. ProcessManager.launch/run_to_completion now take an explicit `cwd`,
+  and TransitionManager always passes a `_REPO_ROOT` anchored to
+  led_controller/transition_manager.py's own location (two dirs up), independent of
+  the controller's own cwd or config.yaml's location.
 
 - known pre-existing bug (unrelated, flagged separately): the Start button's MQTT
   command_template reads from select.led_display_controller_program/subprogram, but the

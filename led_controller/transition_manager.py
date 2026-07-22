@@ -10,12 +10,25 @@ sees the state machine's published state.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from .commands import State
 from .config import AppConfig, ConfigError, Program
 from .process_manager import ProcessHandle, ProcessManager
 from .relay import RelayController
 from .state_machine import StateMachine
+
+# Program commands in config.yaml (e.g. "python3 programs/idle.py") are written
+# relative to the repo root by convention -- see README.md. Resolving that relative
+# path against whatever cwd the *controller* happened to be started with (its
+# systemd unit's WorkingDirectory, an interactive shell, cron, ...) only works if
+# that cwd happens to match the repo root; get it wrong (or omit it, which is easy to
+# do when hand-writing a unit file) and every launch fails with "No such file or
+# directory" despite the config being completely correct. Anchoring explicitly to
+# this package's own location instead -- two directories up from
+# led_controller/transition_manager.py is the repo root that "programs/" is relative
+# to -- makes it correct regardless of the controller process's own cwd.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 @dataclass
@@ -56,7 +69,7 @@ class TransitionManager:
 
     def _launch_idle(self) -> None:
         command = self._config.render_command(self._config.system.idle)
-        self._foreground = self._proc.launch(command)
+        self._foreground = self._proc.launch(command, cwd=_REPO_ROOT)
 
     def _resolve(self, program_id: str, subprogram_id: str | None) -> tuple[Program, str]:
         # program_id/subprogram_id may be either the config id or the display `name`
@@ -73,7 +86,7 @@ class TransitionManager:
 
     def _launch_program(self, program_id: str, subprogram_id: str | None) -> None:
         program, command = self._resolve(program_id, subprogram_id)
-        self._foreground = self._proc.launch(command)
+        self._foreground = self._proc.launch(command, cwd=_REPO_ROOT)
         self.active_program_id = program.id
         # A program with no subprograms has no such concept, no matter what a caller
         # passed in -- e.g. Home Assistant's subprogram select reports "unknown" while
@@ -124,7 +137,7 @@ class TransitionManager:
         self._stop_foreground()
         self.active_program_id = None
         self.active_subprogram_id = None
-        self._proc.run_to_completion(self._config.render_command(self._config.system.shutdown))
+        self._proc.run_to_completion(self._config.render_command(self._config.system.shutdown), cwd=_REPO_ROOT)
         self._relay.off()
         self._sm.transition_to(State.OFF)
 

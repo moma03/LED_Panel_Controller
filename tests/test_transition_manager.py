@@ -3,7 +3,7 @@ from __future__ import annotations
 from led_controller.commands import State
 from led_controller.relay import MockRelay
 from led_controller.state_machine import StateMachine
-from led_controller.transition_manager import LastError, TransitionManager
+from led_controller.transition_manager import _REPO_ROOT, LastError, TransitionManager
 from tests.conftest import make_config
 
 
@@ -16,13 +16,15 @@ class RecordingProcessManager:
         self.run_to_completion_calls: list[str] = []
         self.terminated: list[str] = []
         self.calls: list[str] = []  # ordered log across launch/terminate/run_to_completion
+        self.cwds_used: list = []
         self._next_id = 0
 
-    def launch(self, command: str) -> str:
+    def launch(self, command: str, cwd=None) -> str:
         self._next_id += 1
         handle = f"handle-{self._next_id}"
         self.launched.append(command)
         self.calls.append(f"launch:{command}")
+        self.cwds_used.append(cwd)
         return handle
 
     def poll(self, _handle: str):
@@ -32,9 +34,10 @@ class RecordingProcessManager:
         self.terminated.append(handle)
         self.calls.append(f"terminate:{handle}")
 
-    def run_to_completion(self, command: str) -> int:
+    def run_to_completion(self, command: str, cwd=None) -> int:
         self.run_to_completion_calls.append(command)
         self.calls.append(f"run_to_completion:{command}")
+        self.cwds_used.append(cwd)
         return 0
 
 
@@ -145,3 +148,16 @@ def test_emergency_stop_is_safe_to_call_with_nothing_running():
     tm.emergency_stop()  # must not raise
     assert proc.terminated == []
     assert tm._relay.is_on is False
+
+
+def test_launches_always_use_the_repo_root_as_cwd():
+    # Program commands (e.g. "python3 programs/idle.py") are relative to the repo
+    # root by convention -- resolving them against whatever cwd the controller
+    # process happens to have (e.g. a systemd unit's WorkingDirectory, if set at
+    # all) broke every launch as soon as the two didn't match. Every subprocess must
+    # get an explicit, correct cwd regardless of the controller's own.
+    tm, sm, proc = build(initial=State.IDLE)
+    tm.start("ok", None)
+    tm.shutdown()
+    assert proc.cwds_used
+    assert all(cwd == _REPO_ROOT for cwd in proc.cwds_used)

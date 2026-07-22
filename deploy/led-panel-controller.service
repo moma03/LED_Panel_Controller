@@ -8,10 +8,16 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now led-panel-controller.service
 #
-# Adjust WorkingDirectory/ExecStart below to match where you actually checked out the
-# repo and created the venv. Don't use /root -- see README.md's troubleshooting notes
-# on rpi-rgb-led-matrix's drop_privileges dropping to a user that can't read files
-# under /root once the display programs are running.
+# Adjust ExecStart below to match where you actually checked out the repo and created
+# the venv. Don't use /root -- see README.md's troubleshooting notes on
+# rpi-rgb-led-matrix's drop_privileges dropping to a user that can't read files under
+# /root once the display programs are running.
+#
+# WorkingDirectory below is just a sane default, not load-bearing: program commands
+# in config.yaml (e.g. "python3 programs/idle.py") are launched with an explicit cwd
+# anchored to the repo root (see led_controller/transition_manager.py's _REPO_ROOT),
+# not whatever cwd the controller process itself happens to have. Getting
+# WorkingDirectory wrong or omitting it here no longer breaks program launches.
 
 [Unit]
 Description=LED Panel Controller
@@ -21,7 +27,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/led-panel-controller
-ExecStart=/opt/led-panel-controller/venv/bin/python3 -m led_controller --config /opt/led-panel-controller/config.yaml
+ExecStart=/opt/led-panel-controller/venv/bin/python3 -m led_controller --config /opt/led-panel-controller/config/config.yaml
 Restart=on-failure
 RestartSec=2
 # rpi-rgb-led-matrix needs root to access the GPIO/DMA registers directly (it drops to

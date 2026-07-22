@@ -38,7 +38,7 @@ matrix:
   chain_length: 2
   parallel: 2
   multiplexing: 0
-  pwm_bits: 4
+  pwm_bits: 5
   pwm_dither_bits: 1
   brightness: 100
   gpio_slowdown: 1
