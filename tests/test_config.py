@@ -239,3 +239,18 @@ def test_render_command_without_placeholder_is_unchanged(tmp_path):
     config = load_config(write(tmp_path, VALID_YAML + "\nmatrix:\n  rows: 64\n"))
     assert config.render_command("python3 weather.py") == "python3 weather.py"
 
+
+def test_render_command_substitutes_python_placeholder_with_sys_executable(tmp_path):
+    import sys
+
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.render_command("{python} weather.py") == f"{sys.executable} weather.py"
+
+
+def test_render_command_python_placeholder_is_not_shadowed_by_a_literal_python3(tmp_path):
+    # A bare "python3" is resolved via the child process's $PATH at launch time,
+    # which isn't guaranteed to be the interpreter running the controller (e.g. under
+    # systemd, or sudo) -- only {python} guarantees sys.executable is used.
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.render_command("python3 weather.py") == "python3 weather.py"
+

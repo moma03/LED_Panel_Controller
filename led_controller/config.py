@@ -7,6 +7,7 @@ error instead of surfacing as a runtime crash mid-transition.
 from __future__ import annotations
 
 import shlex
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -154,8 +155,19 @@ class AppConfig:
     process_terminate_timeout: float = 5.0
 
     def render_command(self, command: str) -> str:
-        """Substitutes the {matrix_options} placeholder, used by any program or
-        system command that needs the matrix hardware config -- see MatrixConfig."""
+        """Substitutes the {matrix_options} and {python} placeholders.
+
+        {python} expands to sys.executable -- the exact interpreter running the
+        controller right now, venv and all. A bare "python3" in a command is
+        resolved via the child process's $PATH at launch time, which is *not*
+        guaranteed to be the same interpreter the controller itself is running
+        under (rgbmatrix must be installed into that specific interpreter -- see
+        README.md): a systemd unit's minimal $PATH in particular usually doesn't
+        include a venv's bin/ directory, so a bare "python3" there silently falls
+        back to system Python and whatever (possibly stale, possibly missing
+        rgbmatrix entirely) packages happen to be installed there instead."""
+        if "{python}" in command:
+            command = command.replace("{python}", sys.executable)
         if "{matrix_options}" not in command:
             return command
         return command.replace("{matrix_options}", self.matrix.as_cli_args())

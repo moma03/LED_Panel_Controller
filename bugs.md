@@ -57,3 +57,13 @@
   name and always resolve to the same program/subprogram id for the actual
   {subprogram} substitution. Config load now rejects duplicate program/subprogram
   names since the dropdowns resolve by name.
+- [fixed] idle.py still crashed under systemd even after rebuilding rgbmatrix in the
+  venv (AttributeError: RGBMatrixOptions has no attribute 'rp1_pio') -> not a stale
+  build after all; config.yaml's commands said bare "python3", which
+  subprocess.Popen resolves via the *child* process's $PATH at launch time -- under
+  systemd's minimal $PATH (no venv bin/ on it) that silently ran system Python and
+  its separate, older rgbmatrix install in /usr/local/lib/.../dist-packages, not the
+  freshly-built venv one. Added a {python} placeholder (AppConfig.render_command,
+  led_controller/config.py) that expands to sys.executable -- the exact interpreter
+  running the controller -- so config.yaml can say "{python} programs/idle.py ..."
+  instead of a bare "python3" and always get the right venv regardless of $PATH.

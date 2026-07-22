@@ -41,10 +41,14 @@ programs:
 ```
 
 The controller substitutes placeholders before executing the command. Supported now:
-`{subprogram}` (any program) and `{matrix_options}` (any program, expanded into
+`{subprogram}` (any program), `{matrix_options}` (any program, expanded into
 the individual `--led-*` LED matrix hardware flags from the top-level `matrix:` config
-block — see `led_controller/config.py`'s `MatrixConfig`). Reserved for later:
-`{language}`, `{theme}`, `{rotation}`.
+block — see `led_controller/config.py`'s `MatrixConfig`), and `{python}` (any Python
+program's command, expanded to `sys.executable` -- the exact interpreter running the
+controller, so a launched program always uses the same venv as the controller itself
+rather than whatever a bare `python3` resolves to via the child process's `$PATH`,
+which is not guaranteed to be the same interpreter, particularly under systemd).
+Reserved for later: `{language}`, `{theme}`, `{rotation}`.
 
 If a command requests a subprogram that isn't defined in config, the request is rejected before any process starts (no state change) and an error is published.
 
