@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
-config/config.yaml
 
 .DS_Store
+
+# ignore all not example config and service files, but not the README.md in this directory
+*.env
+*.service
+config.yaml
