@@ -3,15 +3,7 @@
 # hung, it can't act on its own MQTT commands (its single dispatch loop is what's
 # stuck), so the thing that force-restarts it has to live outside it.
 #
-# Install:
-#   sudo cp deploy/led-panel-emergency-restart.service /etc/systemd/system/
-#   sudo chmod +x /opt/led-panel-controller/deploy/*.sh
-#   # only if your broker needs credentials or isn't on localhost:1883 --
-#   # see led-panel-emergency-restart.env.example in this directory:
-#   sudo cp deploy/led-panel-emergency-restart.env.example deploy/led-panel-emergency-restart.env
-#   sudo $EDITOR deploy/led-panel-emergency-restart.env
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now led-panel-emergency-restart.service
+# Install: See README.md in this directory for instructions on how to install and enable the service.
 #
 # Then in Home Assistant: button.led_display_emergency_restart appears automatically
 # via MQTT Discovery, same device as the rest of the LED Display Controller entities.

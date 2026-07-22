@@ -15,21 +15,25 @@ Two independent systemd services:
 
 ## Install
 
-```
-# Controller service (adjust the paths inside the unit file first if you didn't
-# check out the repo to /opt/led-panel-controller)
-sudo cp deploy/led-panel-controller.service /etc/systemd/system/
+```bash
+# Copy example service to the right place and edit it
+sudo cp deploy/led-panel-controller.service.example /etc/systemd/system/led-panel-controller.service
+sudo $EDITOR /etc/systemd/system/led-panel-controller.service
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now led-panel-controller.service
 
+
 # Emergency restart watchdog
-sudo mkdir -p /opt/led-panel-controller/deploy
-sudo cp deploy/emergency-restart-watchdog.sh deploy/restart-controller.sh /opt/led-panel-controller/deploy/
-sudo chmod +x /opt/led-panel-controller/deploy/*.sh
-sudo cp deploy/led-panel-emergency-restart.service /etc/systemd/system/
+sudo chmod +x deploy/*.sh
+
+sudo cp deploy/led-panel-emergency-restart.service.example /etc/systemd/system/led-panel-emergency-restart.service
+sudo $EDITOR /etc/systemd/system/led-panel-emergency-restart.service
+
 # Only if your broker needs credentials or isn't on localhost:1883:
-sudo cp deploy/led-panel-emergency-restart.env.example /etc/led-panel-emergency-restart.env
-sudo $EDITOR /etc/led-panel-emergency-restart.env
+sudo cp deploy/led-panel-emergency-restart.env.example deploy/led-panel-emergency-restart.env
+sudo $EDITOR deploy/led-panel-emergency-restart.env
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now led-panel-emergency-restart.service
 ```

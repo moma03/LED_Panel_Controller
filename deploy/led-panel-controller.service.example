@@ -3,10 +3,7 @@
 # stuck) -- for that, see emergency-restart-watchdog.sh / led-panel-emergency-restart.service
 # in this directory, which force-restart the service on demand from Home Assistant.
 #
-# Install:
-#   sudo cp deploy/led-panel-controller.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now led-panel-controller.service
+# Install: See README.md in this directory for instructions on how to install and enable the service.
 #
 # Adjust ExecStart below to match where you actually checked out the repo and created
 # the venv. Don't use /root -- see README.md's troubleshooting notes on
