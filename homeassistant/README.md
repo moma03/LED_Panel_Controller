@@ -28,7 +28,10 @@ them within a few seconds under one device, **LED Display Controller**:
 - `select.led_display_program`, `select.led_display_subprogram` — options are the
   display `name` of each program/subprogram from the controller's config (e.g. "Train
   Board", "Berlin Hbf"), not the config id (`trainboard`, `berlin`); the controller
-  resolves either one back to the right program, so `name` just has to be unique
+  resolves either one back to the right program, so `name` just has to be unique.
+  `select.led_display_subprogram`'s options narrow down to just the currently
+  selected program's own subprograms as soon as you pick one in
+  `select.led_display_program` — see "How the two-step selection works" below
 - `button.led_display_power_on`, `button.led_display_start_program`,
   `button.led_display_stop`, `button.led_display_reset`, `button.led_display_shutdown`
 
@@ -65,6 +68,14 @@ retained topic (`display/pending/program`, `display/pending/subprogram`), which 
 lets them remember what you picked. The Start button reads both selects'
 current values via `command_template` and sends them together to the controller only
 when pressed.
+
+The controller also subscribes to `display/pending/program` itself (not just Home
+Assistant), and whenever it changes, republishes `select.led_display_subprogram`'s
+discovery config with its `options` narrowed to just that program's own subprograms
+(and resets the pending subprogram selection back to `none`, since a subprogram name
+from a different program is guaranteed invalid — `name`s are unique across every
+program). This is just an MQTT Discovery config update, same mechanism as the initial
+setup — no extra entity, no Home Assistant-side templating.
 
 ## Limitations
 

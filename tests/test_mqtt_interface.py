@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 import queue
 
-from led_controller.mqtt_interface import MQTTInterface
-from tests.conftest import FakeMQTTClient, make_config
+from led_controller.mqtt_interface import (
+    TOPIC_PENDING_PROGRAM,
+    TOPIC_PENDING_SUBPROGRAM,
+    MQTTInterface,
+)
+from tests.conftest import FakeMQTTClient, FakeMQTTMessage, make_config
 
 
 def build_interface(connect_reason_code: int = 0):
@@ -22,6 +26,7 @@ def test_successful_connect_subscribes_to_control_topics():
         "display/control/stop",
         "display/control/reset",
         "display/control/shutdown",
+        TOPIC_PENDING_PROGRAM,
     }
 
 
@@ -119,3 +124,54 @@ def test_every_discovery_entity_has_an_object_id():
     for topic, payload, _ in discovery_messages(client):
         assert "object_id" in payload, f"{topic} is missing object_id"
         assert payload["object_id"].startswith("led_display_")
+
+
+def _latest_subprogram_select(client):
+    matches = [m for m in discovery_messages(client) if "select/led_display_controller/subprogram" in m[0]]
+    return matches[-1][1]
+
+
+def test_picking_a_program_narrows_subprogram_options_to_just_its_own():
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())  # "Train Board" is the only program with subprograms
+
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "Train Board"))
+    assert set(_latest_subprogram_select(client)["options"]) == {"none", "Berlin Hbf"}
+
+
+def test_picking_a_program_without_subprograms_narrows_to_just_none():
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())
+
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "OK"))
+    assert _latest_subprogram_select(client)["options"] == ["none"]
+
+
+def test_picking_a_program_resets_the_pending_subprogram_selection():
+    # Subprogram `name` values are unique across every program (config.py enforces
+    # it), so whatever was selected before is guaranteed invalid for a newly-picked
+    # program -- it must not silently carry over.
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())
+
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "OK"))
+    reset_messages = [p for t, p, r in client.published if t == TOPIC_PENDING_SUBPROGRAM]
+    assert reset_messages[-1] == "none"
+
+
+def test_pending_program_message_before_discovery_is_ignored():
+    # Guards against a retained display/pending/program message arriving before
+    # publish_discovery has run (and so before self._config is set) -- must not crash.
+    mqtt, client = build_interface()
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "Train Board"))  # must not raise
+    assert client.published == []
+
+
+def test_unrecognized_pending_program_value_narrows_to_just_none():
+    # Covers a genuinely-untouched select ("unknown"/"unavailable") the same way
+    # mqtt_interface's own _NULL_LIKE_STATES guard treats it elsewhere.
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())
+
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "unknown"))
+    assert _latest_subprogram_select(client)["options"] == ["none"]

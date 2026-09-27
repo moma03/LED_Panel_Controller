@@ -67,3 +67,13 @@
   led_controller/config.py) that expands to sys.executable -- the exact interpreter
   running the controller -- so config.yaml can say "{python} programs/idle.py ..."
   instead of a bare "python3" and always get the right venv regardless of $PATH.
+- [fixed] Home Assistant's subprogram dropdown always showed every program's
+  subprograms, not just the current program's -> it's a single shared select entity
+  (MQTT Discovery has no per-program dropdown), populated once at startup with the
+  flat union of every program's subprogram names. Controller now subscribes to
+  display/pending/program itself and, whenever it changes, republishes the
+  subprogram select's discovery config with options narrowed to that program's own
+  subprograms (same retained-config mechanism as initial discovery, no new entity),
+  and resets the pending subprogram selection to "none" -- safe because subprogram
+  `name`s are enforced unique across every program, so a stale selection can never
+  be valid for a newly-picked one. See MQTTInterface._on_pending_program_changed.

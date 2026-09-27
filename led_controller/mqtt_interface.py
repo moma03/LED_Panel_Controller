@@ -77,6 +77,10 @@ class MQTTInterface:
         self._queue = command_queue
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
+        # Set by publish_discovery -- needed afterwards too, to look up a program's
+        # subprograms whenever the pending-program select changes (see
+        # _on_pending_program_changed).
+        self._config: AppConfig | None = None
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -93,20 +97,47 @@ class MQTTInterface:
             return
         for topic in _CONTROL_TOPIC_COMMANDS:
             self._client.subscribe(topic)
+        # TOPIC_PENDING_PROGRAM is retained, so subscribing also immediately delivers
+        # whatever program was last picked (including across a controller restart),
+        # which re-narrows the subprogram select right away instead of leaving it
+        # showing every program's subprograms until the user touches it again.
+        self._client.subscribe(TOPIC_PENDING_PROGRAM)
 
     def _on_message(self, _client, _userdata, message) -> None:
         print(f"[led-controller] MQTT message received: {message.topic} {message.payload}")
-        command = _CONTROL_TOPIC_COMMANDS.get(message.topic)
-        if command is None:
-            return
         raw_payload = message.payload
         if isinstance(raw_payload, bytes):
             raw_payload = raw_payload.decode("utf-8")
+
+        if message.topic == TOPIC_PENDING_PROGRAM:
+            self._on_pending_program_changed(raw_payload)
+            return
+
+        command = _CONTROL_TOPIC_COMMANDS.get(message.topic)
+        if command is None:
+            return
         try:
             payload = json.loads(raw_payload) if raw_payload else {}
         except json.JSONDecodeError:
             payload = {}
         self._queue.put((command, payload))
+
+    def _on_pending_program_changed(self, program_name: str) -> None:
+        """Narrows the subprogram select's options to just the newly-picked program's
+        subprograms, instead of the flat union of every program's -- Home Assistant
+        was otherwise happy to let you pick, say, "Berlin Hbf" while "Weather" was
+        selected, which start() then rejects since Weather doesn't have that
+        subprogram (or any). Also resets the pending subprogram selection to "none":
+        program/subprogram `name` values are enforced unique across every program
+        (see config.py's _check_unique_names), so whatever was previously selected
+        can never be valid for a different program -- leaving it selected would just
+        silently carry over a value the new program is guaranteed to reject."""
+        if self._config is None:
+            return
+        program = self._config.resolve_program(program_name)
+        subprogram_names = sorted(sub.name for sub in program.subprograms.values()) if program else []
+        self._publish_discovery_entity("select", "subprogram", self._subprogram_select_config(subprogram_names))
+        self._client.publish(TOPIC_PENDING_SUBPROGRAM, "none", retain=True)
 
     # -- publishing ---------------------------------------------------------
 
@@ -138,6 +169,7 @@ class MQTTInterface:
         """Publishes retained Home Assistant MQTT Discovery configs so entities are
         created/updated automatically from config.yaml — no hand-maintained option
         lists on the Home Assistant side, per the single-source-of-truth design goal."""
+        self._config = config
         for object_id, entity_config in self._sensor_configs():
             self._publish_discovery_entity("sensor", object_id, entity_config)
         for object_id, entity_config in self._select_configs(config):
@@ -194,6 +226,13 @@ class MQTTInterface:
         # Program.resolve_subprogram / AppConfig.resolve_program), so the pending
         # selects can just retain whatever string these options show without any
         # separate id<->name translation happening in Home Assistant itself.
+        #
+        # The subprogram select starts out showing every program's subprograms --
+        # nothing's been picked yet, so there's no program to narrow it to. It gets
+        # narrowed down to just the selected program's own subprograms as soon as one
+        # is picked -- see _on_pending_program_changed, which republishes this same
+        # discovery config (same object_id, so it updates rather than duplicates the
+        # entity) with a filtered options list.
         subprogram_names = sorted(
             {sub.name for program in config.programs.values() for sub in program.subprograms.values()}
         )
@@ -206,15 +245,18 @@ class MQTTInterface:
                 "retain": True,
                 "icon": "mdi:monitor",
             }),
-            ("subprogram", {
-                "name": "Subprogram",
-                "options": ["none"] + subprogram_names,
-                "command_topic": TOPIC_PENDING_SUBPROGRAM,
-                "state_topic": TOPIC_PENDING_SUBPROGRAM,
-                "retain": True,
-                "icon": "mdi:subdirectory-arrow-right",
-            }),
+            ("subprogram", self._subprogram_select_config(subprogram_names)),
         ]
+
+    def _subprogram_select_config(self, subprogram_names: list[str]) -> dict:
+        return {
+            "name": "Subprogram",
+            "options": ["none"] + subprogram_names,
+            "command_topic": TOPIC_PENDING_SUBPROGRAM,
+            "state_topic": TOPIC_PENDING_SUBPROGRAM,
+            "retain": True,
+            "icon": "mdi:subdirectory-arrow-right",
+        }
 
     def _button_configs(self):
         return [
