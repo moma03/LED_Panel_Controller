@@ -24,6 +24,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/led-panel-controller
+# Without this, Python block-buffers stdout when it isn't a terminal, so the
+# controller's log lines only reach journalctl when the process exits.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/led-panel-controller/venv/bin/python3 -m led_controller --config /opt/led-panel-controller/config/config.yaml
 Restart=on-failure
 RestartSec=2

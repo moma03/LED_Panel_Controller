@@ -42,7 +42,10 @@ matrix:
   pwm_dither_bits: 1
   brightness: 100
   gpio_slowdown: 1
-  show_refresh_rate: true
+  # Prints a live "190.0Hz" counter to stdout, redrawn with backspace characters --
+  # under systemd that floods journalctl with unreadable "[48.0K blob data]" lines.
+  # Only turn it on while tuning the panel interactively.
+  show_refresh_rate: false
   limit_refresh_rate_hz: 190
 
 # System animations: run like any other program, but not user-selectable.
