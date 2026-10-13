@@ -89,7 +89,7 @@ programs:
     subprograms:
       frankfurt:
         name: Frankfurt Hbf
-        settings: { station: "8000105" }
+        settings: { station: "Frankfurt(Main)Hbf" }
       berlin:
         name: Berlin Hbf
         settings: { station: "Berlin Hbf" }
