@@ -17,6 +17,7 @@ from .commands import Command, State
 from .config import AppConfig
 from .mqtt_interface import MQTTInterface
 from .process_manager import ProcessManager
+from .program_controls import ControlsHub
 from .relay import build_relay
 from .state_machine import InvalidCommandError, StateMachine
 from .transition_manager import TransitionError, TransitionManager
@@ -31,17 +32,20 @@ class DisplayController:
         state_machine: StateMachine | None = None,
         process_manager: ProcessManager | None = None,
         transition_manager: TransitionManager | None = None,
+        controls: ControlsHub | None = None,
     ):
         self._config = config
         self._mqtt = mqtt
         self._queue = command_queue
         self._sm = state_machine or StateMachine()
         self._proc = process_manager or ProcessManager()
+        self._controls = controls or ControlsHub()
         self._tm = transition_manager or TransitionManager(
             config,
             self._sm,
             self._proc,
             build_relay(config.relay.backend, config.relay.pin, config.relay.active_low),
+            self._controls,
         )
         self._sm.add_listener(self._on_state_change)
         self._stop_event = threading.Event()
@@ -77,6 +81,7 @@ class DisplayController:
     def step(self, timeout: float = 0.5) -> None:
         """Processes at most one command, then checks for an unexpected process exit.
         Exposed separately from run_forever so tests can drive the loop deterministically."""
+        self._controls.tick()
         try:
             command, payload = self._queue.get(timeout=timeout)
         except queue.Empty:

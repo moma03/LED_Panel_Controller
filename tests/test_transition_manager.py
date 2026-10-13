@@ -17,9 +17,11 @@ class RecordingProcessManager:
         self.terminated: list[str] = []
         self.calls: list[str] = []  # ordered log across launch/terminate/run_to_completion
         self.cwds_used: list = []
+        self.channels: list = []
         self._next_id = 0
 
-    def launch(self, command: str, cwd=None) -> str:
+    def launch(self, command: str, cwd=None, channel=None) -> str:
+        self.channels.append(channel)
         self._next_id += 1
         handle = f"handle-{self._next_id}"
         self.launched.append(command)
@@ -91,25 +93,6 @@ def test_subprogram_kept_for_program_with_subprograms():
     tm.start("trainboard", "berlin")
     assert sm.state == State.RUNNING
     assert tm.active_subprogram_id == "berlin"
-
-
-def test_custom_subprogram_text_is_launched_and_reported():
-    from dataclasses import replace
-
-    config = make_config()
-    programs = dict(config.programs)
-    programs["trainboard"] = replace(programs["trainboard"], custom_subprogram=True)
-    tm, sm, proc = build(replace(config, programs=programs))
-    tm.start("trainboard", "Hamburg Dammtor")
-    assert sm.state == State.RUNNING
-    assert proc.launched[-1].endswith("'Hamburg Dammtor'")
-    assert tm.active_subprogram_id == "Hamburg Dammtor"
-
-
-def test_free_text_rejected_for_program_without_custom_subprogram():
-    tm, sm, proc = build()
-    tm.start("trainboard", "Hamburg Dammtor")
-    assert sm.state == State.ERROR
 
 
 def test_reset_after_error_clears_error_and_returns_to_idle():

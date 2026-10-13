@@ -19,17 +19,13 @@ class ConfigError(Exception):
     """Raised for any structurally or semantically invalid config file."""
 
 
-# The subprogram select's extra option for programs with `custom_subprogram:
-# true` -- picking it means "use the free-text field instead". Reserved: no
-# configured subprogram may use this name.
-CUSTOM_SUBPROGRAM_OPTION = "Custom"
-CUSTOM_SUBPROGRAM_MAX_LENGTH = 100
-
-
 @dataclass(frozen=True)
 class Subprogram:
     id: str
     name: str
+    # For programs with controls: values applied to them before launch, so a
+    # subprogram is a preset (see docs/program-controls.md).
+    settings: dict[str, Any] = field(default_factory=dict, compare=False)
 
 
 @dataclass(frozen=True)
@@ -38,10 +34,9 @@ class Program:
     name: str
     command: str
     subprograms: dict[str, Subprogram] = field(default_factory=dict)
-    # Accept any text as the subprogram, not only the configured ones -- e.g. a
-    # station name the program resolves itself. Configured subprograms still
-    # resolve as usual; anything else is passed through, shell-quoted.
-    custom_subprogram: bool = False
+    # Command printing the program's control manifest (docs/program-controls.md),
+    # or None for a program without controls.
+    manifest: str | None = None
 
     def resolve_subprogram(self, key: str | None) -> Subprogram | None:
         """Looks up a subprogram by its id (the subprograms: dict key) or by its
@@ -57,36 +52,10 @@ class Program:
                 return subprogram
         return None
 
-    def custom_value(self, subprogram_id: str | None) -> str | None:
-        """The free text to pass as the subprogram, or None if `subprogram_id` is a
-        configured subprogram (or this program takes no free text). Raises for text
-        that cannot be passed safely."""
-        if not self.custom_subprogram or subprogram_id is None:
-            return None
-        if self.resolve_subprogram(subprogram_id) is not None:
-            return None
-        text = subprogram_id.strip()
-        if not text:
-            raise ConfigError(f"program '{self.id}': custom subprogram is empty")
-        if len(text) > CUSTOM_SUBPROGRAM_MAX_LENGTH:
-            raise ConfigError(
-                f"program '{self.id}': custom subprogram longer than "
-                f"{CUSTOM_SUBPROGRAM_MAX_LENGTH} characters"
-            )
-        if any(not ch.isprintable() for ch in text):
-            raise ConfigError(f"program '{self.id}': custom subprogram contains control characters")
-        return text
-
     def resolve_command(self, subprogram_id: str | None) -> str:
-        """Substitute the {subprogram} placeholder, rejecting unknown subprograms --
-        unless the program takes free text, which is substituted shell-quoted (the
-        command is split with shlex, no shell involved, so quoting keeps a name with
-        spaces one argument and nothing in it can add arguments)."""
+        """Substitute the {subprogram} placeholder, rejecting unknown subprograms."""
         if "{subprogram}" not in self.command:
             return self.command
-        custom = self.custom_value(subprogram_id)
-        if custom is not None:
-            return self.command.replace("{subprogram}", shlex.quote(custom))
         subprogram = self.resolve_subprogram(subprogram_id)
         if subprogram is None:
             raise ConfigError(
@@ -227,7 +196,12 @@ def _load_subprograms(raw: dict, program_id: str) -> dict[str, Subprogram]:
     for sub_id, sub_raw in (raw or {}).items():
         if "name" not in sub_raw:
             raise ConfigError(f"program '{program_id}' subprogram '{sub_id}' missing 'name'")
-        subprograms[sub_id] = Subprogram(id=sub_id, name=sub_raw["name"])
+        settings = sub_raw.get("settings", {})
+        if not isinstance(settings, dict):
+            raise ConfigError(
+                f"program '{program_id}' subprogram '{sub_id}': 'settings' must be a mapping"
+            )
+        subprograms[sub_id] = Subprogram(id=sub_id, name=sub_raw["name"], settings=dict(settings))
     return subprograms
 
 
@@ -239,20 +213,21 @@ def _load_programs(raw: dict) -> dict[str, Program]:
         for required in ("name", "command"):
             if required not in prog_raw:
                 raise ConfigError(f"program '{prog_id}' missing required field '{required}'")
-        custom = prog_raw.get("custom_subprogram", False)
-        if not isinstance(custom, bool):
-            raise ConfigError(f"program '{prog_id}': 'custom_subprogram' must be true or false")
-        if custom and "{subprogram}" not in prog_raw["command"]:
+        manifest = prog_raw.get("manifest")
+        if manifest is not None and (not isinstance(manifest, str) or not manifest.strip()):
+            raise ConfigError(f"program '{prog_id}': 'manifest' must be a command string")
+        subprograms = _load_subprograms(prog_raw.get("subprograms"), prog_id)
+        if manifest is None and any(sub.settings for sub in subprograms.values()):
             raise ConfigError(
-                f"program '{prog_id}': 'custom_subprogram' needs a {{subprogram}} placeholder "
-                "in its command"
+                f"program '{prog_id}': subprogram 'settings' need a 'manifest' -- only a "
+                "program with controls has settings to preset"
             )
         programs[prog_id] = Program(
             id=prog_id,
             name=prog_raw["name"],
             command=prog_raw["command"],
-            subprograms=_load_subprograms(prog_raw.get("subprograms"), prog_id),
-            custom_subprogram=custom,
+            subprograms=subprograms,
+            manifest=manifest,
         )
     _check_unique_names(
         [p.name for p in programs.values()],
@@ -263,13 +238,6 @@ def _load_programs(raw: dict) -> dict[str, Program]:
         "subprogram 'name' values must be unique across all programs -- Home Assistant's "
         "subprogram select is a single dropdown shared by every program and resolves by name",
     )
-    for p in programs.values():
-        for sub in p.subprograms.values():
-            if CUSTOM_SUBPROGRAM_OPTION in (sub.id, sub.name):
-                raise ConfigError(
-                    f"program '{p.id}': subprogram {CUSTOM_SUBPROGRAM_OPTION!r} is reserved "
-                    "for the free-text option of custom_subprogram programs"
-                )
     return programs
 
 

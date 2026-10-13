@@ -14,7 +14,9 @@ from pathlib import Path
 
 from .commands import State
 from .config import AppConfig, ConfigError, Program
+from .control_channel import ControlChannel
 from .process_manager import ProcessHandle, ProcessManager
+from .program_controls import ControlsHub, ProgramControls
 from .relay import RelayController
 from .state_machine import StateMachine
 
@@ -49,11 +51,14 @@ class TransitionManager:
         state_machine: StateMachine,
         process_manager: ProcessManager,
         relay: RelayController,
+        controls: ControlsHub | None = None,
     ):
         self._config = config
         self._sm = state_machine
         self._proc = process_manager
         self._relay = relay
+        self._controls = controls or ControlsHub()
+        self._attached: ProgramControls | None = None   # controls of the running program
 
         self._foreground: ProcessHandle | None = None
         self.active_program_id: str | None = None
@@ -66,6 +71,12 @@ class TransitionManager:
         if self._foreground is not None:
             self._proc.terminate(self._foreground, self._config.process_terminate_timeout)
             self._foreground = None
+        self._detach_controls()
+
+    def _detach_controls(self) -> None:
+        if self._attached is not None:
+            self._attached.detach()
+            self._attached = None
 
     def _launch_idle(self) -> None:
         command = self._config.render_command(self._config.system.idle)
@@ -86,7 +97,28 @@ class TransitionManager:
 
     def _launch_program(self, program_id: str, subprogram_id: str | None) -> None:
         program, command = self._resolve(program_id, subprogram_id)
-        self._foreground = self._proc.launch(command, cwd=_REPO_ROOT)
+        controls = self._controls.get(program.id)
+        subprogram = program.resolve_subprogram(subprogram_id)
+        if subprogram is not None and subprogram.settings:
+            if controls is None:
+                raise TransitionError(
+                    f"subprogram {subprogram.id!r} presets settings, but {program.id!r} has no "
+                    "controls (its manifest did not load)"
+                )
+            try:
+                controls.apply_preset(subprogram.settings)
+            except ValueError as exc:
+                raise TransitionError(f"subprogram {subprogram.id!r}: {exc}") from exc
+        channel = ControlChannel() if controls is not None else None
+        try:
+            self._foreground = self._proc.launch(command, cwd=_REPO_ROOT, channel=channel)
+        except Exception:
+            if channel is not None:
+                channel.close()
+            raise
+        if controls is not None:
+            controls.attach(channel)
+            self._attached = controls
         self.active_program_id = program.id
         # A program with no subprograms has no such concept, no matter what a caller
         # passed in -- e.g. Home Assistant's subprogram select reports "unknown" while
@@ -95,11 +127,7 @@ class TransitionManager:
         # display/current is consistent regardless of whether the caller sent an id
         # or a display name.
         resolved_subprogram = program.resolve_subprogram(subprogram_id)
-        if resolved_subprogram is not None:
-            self.active_subprogram_id = resolved_subprogram.id
-        else:
-            # Free text (custom_subprogram), or None for programs without any.
-            self.active_subprogram_id = program.custom_value(subprogram_id)
+        self.active_subprogram_id = resolved_subprogram.id if resolved_subprogram else None
 
     # -- sequences ---------------------------------------------------------
 
@@ -180,6 +208,7 @@ class TransitionManager:
         subprogram_id = self.active_subprogram_id
         message = f"program {program_id!r} exited unexpectedly with code {exit_code}"
         self._foreground = None
+        self._detach_controls()
         self._fail(program_id, subprogram_id, message)
 
     def _fail(self, program_id: str | None, subprogram_id: str | None, message: str) -> None:

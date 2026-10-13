@@ -11,7 +11,9 @@ import paho.mqtt.client as mqtt
 
 from .config import ConfigError, load_config
 from .controller import DisplayController
-from .mqtt_interface import MQTTInterface
+from .mqtt_interface import HUB_DEVICE_ID, MQTTInterface
+from .program_controls import ControlsHub
+from .transition_manager import _REPO_ROOT
 
 
 def main() -> None:
@@ -32,7 +34,16 @@ def main() -> None:
         client.username_pw_set(config.mqtt_username, config.mqtt_password)
     command_queue: "queue.Queue" = queue.Queue()
     mqtt_interface = MQTTInterface(client, command_queue)
-    controller = DisplayController(config, mqtt_interface, command_queue)
+    # Programs' own settings and status for Home Assistant, from each program's
+    # manifest (docs/program-controls.md). Loaded once, before connecting.
+    controls = ControlsHub.build(
+        {p.id: config.render_command(p.manifest) for p in config.programs.values() if p.manifest},
+        publish=mqtt_interface.publish_raw,
+        hub_device_id=HUB_DEVICE_ID,
+        cwd=_REPO_ROOT,
+    )
+    mqtt_interface.set_program_controls(controls)
+    controller = DisplayController(config, mqtt_interface, command_queue, controls=controls)
 
     def _handle_signal(_signum, _frame):
         controller.request_stop()

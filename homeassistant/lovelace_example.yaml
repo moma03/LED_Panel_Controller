@@ -23,10 +23,45 @@ cards:
         name: Program
       - entity: select.led_display_subprogram
         name: Subprogram (Train Board only)
-      # Used when the subprogram select is set to "Custom" (programs with
-      # custom_subprogram: true), e.g. any station by name.
-      - entity: text.led_display_controller_custom_subprogram
-        name: Custom station
+
+  # Each program with controls is its own HA device. Show its card only while
+  # it is the program on the panel: the current-program sensor holds the
+  # program id from the controller's config.yaml. The entity ids below are the
+  # ones the manifests suggest; HA keeps whatever ids existing entities already
+  # have (matched by unique_id), so check the device page and adjust.
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: sensor.led_display_controller_current_program
+        state: hvv_display
+    card:
+      type: entities
+      title: HVV U-Bahn
+      entities:
+        - select.hvv_display_favorite
+        - text.hvv_display_station
+        - select.hvv_display_display
+        - select.hvv_display_panel
+        - select.hvv_display_time_format
+        - select.hvv_display_transport
+        - text.hvv_display_line_filter
+        - text.hvv_display_direction_filter
+        - switch.hvv_display_announcements
+        - sensor.hvv_display_next_departure
+        - button.hvv_display_refresh
+
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: sensor.led_display_controller_current_program
+        state: db_display
+    card:
+      type: entities
+      title: Bahn-Abfahrten
+      entities:
+        - text.db_display_station
+        - sensor.db_display_station_name
+        - sensor.db_display_status
 
   - type: horizontal-stack
     cards:

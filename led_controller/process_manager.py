@@ -7,12 +7,15 @@ makes the controller language-independent per setup.md.
 
 from __future__ import annotations
 
+import os
 import shlex
 import signal
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+from .control_channel import ControlChannel
 
 
 @dataclass
@@ -22,8 +25,18 @@ class ProcessHandle:
 
 
 class ProcessManager:
-    def launch(self, command: str, cwd: str | Path | None = None) -> ProcessHandle:
-        popen = subprocess.Popen(shlex.split(command), cwd=cwd)
+    def launch(self, command: str, cwd: str | Path | None = None,
+               channel: ControlChannel | None = None) -> ProcessHandle:
+        """`channel`: a program with controls gets its end of the control channel
+        as an inherited descriptor, named in its environment (see
+        docs/program-controls.md)."""
+        if channel is None:
+            popen = subprocess.Popen(shlex.split(command), cwd=cwd)
+        else:
+            popen = subprocess.Popen(shlex.split(command), cwd=cwd,
+                                     pass_fds=(channel.child_fd,),
+                                     env={**os.environ, **channel.child_env()})
+            channel.after_spawn()
         return ProcessHandle(command=command, popen=popen)
 
     def poll(self, handle: ProcessHandle) -> int | None:

@@ -75,26 +75,30 @@ programs:
     name: Clock
     command: "{python} programs/clock.py"
 
-  # db-display (https://github.com/moma03/db-display) reads its own --eva flag,
-  # falling back to config.json's "database.eva" when it's not given -- see
-  # LoadConfigWithCliOverrides's --led-* equivalent for the matrix options. The
-  # subprogram id doubles as the station's EVA number here since db-display
-  # only cares about that raw value, not a name -- {subprogram} works with any
-  # opaque id, it doesn't have to be a slug like trainboard's above. It's not a
-  # Python program, so no {python} here -- run it with whatever interpreter/binary
-  # it actually needs, same as any non-Python program.
-  #
-  # custom_subprogram: true adds a "Custom" option to Home Assistant's subprogram
-  # select: with it picked, Start sends the "Custom Subprogram" text field
-  # instead (e.g. any station by name -- db-display resolves it to an EVA
-  # number itself). The text is shell-quoted into {subprogram}, so leave the
-  # placeholder unquoted in the command.
+  # Programs with their own controls (docs/program-controls.md): `manifest` is
+  # a command printing what the program exposes to Home Assistant -- station,
+  # display type, filters, ... -- each program as its own HA device. The hub
+  # publishes those entities, keeps their values and hands them to the program
+  # over a control channel, so programs need no MQTT code or credentials.
+  # Subprograms then become presets: their `settings` are applied before the
+  # program starts, and no {subprogram} placeholder is needed in the command.
   db_display:
     name: Train Departures
-    command: /path/to/db-display/start.sh --station {subprogram} {matrix_options}
-    custom_subprogram: true
+    command: /path/to/db-display/start.sh {matrix_options}
+    manifest: /path/to/db-display/start.sh --manifest
     subprograms:
-      "8000297":
+      frankfurt:
         name: Frankfurt Hbf
-      "8000105":
+        settings: { station: "8000105" }
+      berlin:
         name: Berlin Hbf
+        settings: { station: "Berlin Hbf" }
+
+  hvv_display:
+    name: HVV U-Bahn
+    command: /path/to/hvv-display/start.sh {matrix_options}
+    manifest: /path/to/hvv-display/start.sh --manifest
+    subprograms:
+      barmbek:
+        name: Barmbek
+        settings: { station: Barmbek }

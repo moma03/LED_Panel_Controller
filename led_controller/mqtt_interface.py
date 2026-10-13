@@ -19,7 +19,8 @@ from typing import Protocol
 
 from .commands import Command
 from .commands import State as ControllerState
-from .config import CUSTOM_SUBPROGRAM_MAX_LENGTH, CUSTOM_SUBPROGRAM_OPTION, AppConfig
+from .config import AppConfig
+from .program_controls import ControlsHub
 
 TOPIC_PROGRAMS = "display/programs"
 TOPIC_STATUS = "display/status"
@@ -28,11 +29,11 @@ TOPIC_ERRORS = "display/errors"
 
 TOPIC_PENDING_PROGRAM = "display/pending/program"
 TOPIC_PENDING_SUBPROGRAM = "display/pending/subprogram"
-TOPIC_PENDING_CUSTOM_SUBPROGRAM = "display/pending/custom_subprogram"
 
 # Home Assistant MQTT Discovery: https://www.home-assistant.io/integrations/mqtt/#discovery-messages
 _DISCOVERY_PREFIX = "homeassistant"
 _NODE_ID = "led_display_controller"
+HUB_DEVICE_ID = _NODE_ID   # programs' HA devices name it as their via_device
 _DEVICE = {
     "identifiers": [_NODE_ID],
     "name": "LED Display Controller",
@@ -45,13 +46,9 @@ _DEVICE = {
 # and (as a fallback) an entity_id typo -- either way we'd rather send null than one
 # of those literal strings as a program/subprogram id.
 _NULL_LIKE_STATES = "['none', 'unknown', 'unavailable']"
-# Picking the "Custom" subprogram option sends the free-text field instead; the
-# controller accepts that text for programs with custom_subprogram: true.
 _START_COMMAND_TEMPLATE = (
     "{% set prog = states('select.led_display_controller_program') %}"
     "{% set sub = states('select.led_display_controller_subprogram') %}"
-    "{% set custom = states('text.led_display_controller_custom_subprogram') %}"
-    "{% set sub = custom if sub == '" + CUSTOM_SUBPROGRAM_OPTION + "' else sub %}"
     "{{ {'program': none if prog in " + _NULL_LIKE_STATES + " else prog,"
     " 'subprogram': none if sub in " + _NULL_LIKE_STATES + " else sub} | tojson }}"
 )
@@ -86,6 +83,16 @@ class MQTTInterface:
         # subprograms whenever the pending-program select changes (see
         # _on_pending_program_changed).
         self._config: AppConfig | None = None
+        # Programs' own controls (docs/program-controls.md): their topics are
+        # subscribed and routed here, their entities published per program.
+        self._controls = ControlsHub()
+
+    def set_program_controls(self, controls: ControlsHub) -> None:
+        """Before start(): the subscriptions are made on (re)connect."""
+        self._controls = controls
+
+    def publish_raw(self, topic: str, payload: str, retain: bool) -> None:
+        self._client.publish(topic, payload, retain=retain)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -107,6 +114,11 @@ class MQTTInterface:
         # which re-narrows the subprogram select right away instead of leaving it
         # showing every program's subprograms until the user touches it again.
         self._client.subscribe(TOPIC_PENDING_PROGRAM)
+        for topic in self._controls.subscriptions():
+            self._client.subscribe(topic)
+        # Discovery, availability and (once restored) state for every program
+        # with controls -- again after a reconnect, the broker may have lost them.
+        self._controls.on_connect()
 
     def _on_message(self, _client, _userdata, message) -> None:
         print(f"[led-controller] MQTT message received: {message.topic} {message.payload}")
@@ -116,6 +128,8 @@ class MQTTInterface:
 
         if message.topic == TOPIC_PENDING_PROGRAM:
             self._on_pending_program_changed(raw_payload)
+            return
+        if self._controls.handle_message(message.topic, raw_payload):
             return
 
         command = _CONTROL_TOPIC_COMMANDS.get(message.topic)
@@ -141,8 +155,6 @@ class MQTTInterface:
             return
         program = self._config.resolve_program(program_name)
         subprogram_names = sorted(sub.name for sub in program.subprograms.values()) if program else []
-        if program is not None and program.custom_subprogram:
-            subprogram_names.append(CUSTOM_SUBPROGRAM_OPTION)
         self._publish_discovery_entity("select", "subprogram", self._subprogram_select_config(subprogram_names))
         self._client.publish(TOPIC_PENDING_SUBPROGRAM, "none", retain=True)
 
@@ -181,8 +193,6 @@ class MQTTInterface:
             self._publish_discovery_entity("sensor", object_id, entity_config)
         for object_id, entity_config in self._select_configs(config):
             self._publish_discovery_entity("select", object_id, entity_config)
-        for object_id, entity_config in self._text_configs():
-            self._publish_discovery_entity("text", object_id, entity_config)
         for object_id, entity_config in self._button_configs():
             self._publish_discovery_entity("button", object_id, entity_config)
 
@@ -245,8 +255,6 @@ class MQTTInterface:
         subprogram_names = sorted(
             {sub.name for program in config.programs.values() for sub in program.subprograms.values()}
         )
-        if any(program.custom_subprogram for program in config.programs.values()):
-            subprogram_names.append(CUSTOM_SUBPROGRAM_OPTION)
         return [
             ("program", {
                 "name": "Program",
@@ -257,23 +265,6 @@ class MQTTInterface:
                 "icon": "mdi:monitor",
             }),
             ("subprogram", self._subprogram_select_config(subprogram_names)),
-        ]
-
-    def _text_configs(self):
-        # Free text for programs with custom_subprogram: true (e.g. any station by
-        # name). Only used when the subprogram select is set to "Custom" -- see
-        # _START_COMMAND_TEMPLATE -- so a stale value here never overrides a
-        # subprogram picked from the list.
-        return [
-            ("custom_subprogram", {
-                "name": "Custom Subprogram",
-                "command_topic": TOPIC_PENDING_CUSTOM_SUBPROGRAM,
-                "state_topic": TOPIC_PENDING_CUSTOM_SUBPROGRAM,
-                "retain": True,
-                "mode": "text",
-                "max": CUSTOM_SUBPROGRAM_MAX_LENGTH,
-                "icon": "mdi:form-textbox",
-            }),
         ]
 
     def _subprogram_select_config(self, subprogram_names: list[str]) -> dict:

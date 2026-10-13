@@ -32,10 +32,6 @@ them within a few seconds under one device, **LED Display Controller**:
   `select.led_display_subprogram`'s options narrow down to just the currently
   selected program's own subprograms as soon as you pick one in
   `select.led_display_program` — see "How the two-step selection works" below
-- `text.led_display_controller_custom_subprogram` ("Custom Subprogram") — free text
-  for programs with `custom_subprogram: true` in the controller's config, e.g. any
-  station by name. It is only used when the subprogram select is set to **Custom**;
-  a subprogram picked from the list always wins over whatever is left in the field
 - `button.led_display_power_on`, `button.led_display_start_program`,
   `button.led_display_stop`, `button.led_display_reset`, `button.led_display_shutdown`
 
@@ -62,6 +58,20 @@ controller just rejects it and publishes a message to `sensor.led_display_last_e
 
 [`lovelace_example.yaml`](lovelace_example.yaml) has a ready-made card layout — paste
 it into a dashboard view's raw YAML editor, or use it as a reference for your own.
+
+## Program devices
+
+Programs with controls (see [`../docs/program-controls.md`](../docs/program-controls.md))
+show up as devices of their own, each "connected via LED Display Controller" —
+for example **HVV U-Bahn Anzeige** with `select.hvv_display_display`,
+`text.hvv_display_station`, `sensor.hvv_display_next_departure`, ... Their
+settings can be changed at any time, also while another program runs; the
+program picks them up when it starts. Their sensors and buttons are
+unavailable while the program is not on the panel.
+
+To show a program's controls only while it runs, use a conditional card on
+`sensor.led_display_controller_current_program` (its state is the program's id
+from the controller's config) — see `lovelace_example.yaml`.
 
 ## How the two-step selection works
 
