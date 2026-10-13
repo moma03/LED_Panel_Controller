@@ -83,9 +83,16 @@ programs:
   # opaque id, it doesn't have to be a slug like trainboard's above. It's not a
   # Python program, so no {python} here -- run it with whatever interpreter/binary
   # it actually needs, same as any non-Python program.
+  #
+  # custom_subprogram: true adds a "Custom" option to Home Assistant's subprogram
+  # select: with it picked, Start sends the "Custom Subprogram" text field
+  # instead (e.g. any station by name -- db-display resolves it to an EVA
+  # number itself). The text is shell-quoted into {subprogram}, so leave the
+  # placeholder unquoted in the command.
   db_display:
     name: Train Departures
-    command: /path/to/db-display/db_display --eva {subprogram}
+    command: /path/to/db-display/start.sh --station {subprogram} {matrix_options}
+    custom_subprogram: true
     subprograms:
       "8000297":
         name: Frankfurt Hbf

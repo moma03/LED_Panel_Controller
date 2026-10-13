@@ -23,6 +23,10 @@ cards:
         name: Program
       - entity: select.led_display_subprogram
         name: Subprogram (Train Board only)
+      # Used when the subprogram select is set to "Custom" (programs with
+      # custom_subprogram: true), e.g. any station by name.
+      - entity: text.led_display_controller_custom_subprogram
+        name: Custom station
 
   - type: horizontal-stack
     cards:

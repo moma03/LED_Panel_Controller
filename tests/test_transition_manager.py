@@ -93,6 +93,25 @@ def test_subprogram_kept_for_program_with_subprograms():
     assert tm.active_subprogram_id == "berlin"
 
 
+def test_custom_subprogram_text_is_launched_and_reported():
+    from dataclasses import replace
+
+    config = make_config()
+    programs = dict(config.programs)
+    programs["trainboard"] = replace(programs["trainboard"], custom_subprogram=True)
+    tm, sm, proc = build(replace(config, programs=programs))
+    tm.start("trainboard", "Hamburg Dammtor")
+    assert sm.state == State.RUNNING
+    assert proc.launched[-1].endswith("'Hamburg Dammtor'")
+    assert tm.active_subprogram_id == "Hamburg Dammtor"
+
+
+def test_free_text_rejected_for_program_without_custom_subprogram():
+    tm, sm, proc = build()
+    tm.start("trainboard", "Hamburg Dammtor")
+    assert sm.state == State.ERROR
+
+
 def test_reset_after_error_clears_error_and_returns_to_idle():
     tm, sm, proc = build(initial=State.ERROR)
     tm.last_error = LastError(program_id="fail", subprogram_id=None, message="boom")

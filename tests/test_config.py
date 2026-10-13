@@ -254,3 +254,68 @@ def test_render_command_python_placeholder_is_not_shadowed_by_a_literal_python3(
     config = load_config(write(tmp_path, VALID_YAML))
     assert config.render_command("python3 weather.py") == "python3 weather.py"
 
+
+
+CUSTOM_YAML = VALID_YAML.replace(
+    "    command: python3 trainboard.py --station {subprogram}\n",
+    "    command: python3 trainboard.py --station {subprogram}\n    custom_subprogram: true\n",
+)
+
+
+def test_custom_subprogram_defaults_to_false(tmp_path):
+    config = load_config(write(tmp_path, VALID_YAML))
+    assert config.programs["trainboard"].custom_subprogram is False
+
+
+def test_custom_subprogram_passes_free_text_shell_quoted(tmp_path):
+    # The hub splits commands with shlex and runs them without a shell, so the
+    # quoting is what keeps "Hamburg Dammtor" one argument.
+    import shlex
+
+    config = load_config(write(tmp_path, CUSTOM_YAML))
+    command = config.programs["trainboard"].resolve_command("Hamburg Dammtor")
+    assert command == "python3 trainboard.py --station 'Hamburg Dammtor'"
+    assert shlex.split(command)[-1] == "Hamburg Dammtor"
+
+
+def test_custom_subprogram_cannot_inject_arguments(tmp_path):
+    import shlex
+
+    config = load_config(write(tmp_path, CUSTOM_YAML))
+    command = config.programs["trainboard"].resolve_command("x' --evil 'y")
+    assert shlex.split(command)[-1] == "x' --evil 'y"
+    assert "--evil" not in shlex.split(command)
+
+
+def test_custom_subprogram_still_resolves_configured_ones(tmp_path):
+    config = load_config(write(tmp_path, CUSTOM_YAML))
+    assert config.programs["trainboard"].resolve_command("Berlin Hbf") == \
+        "python3 trainboard.py --station berlin"
+
+
+@pytest.mark.parametrize("text", ["", "   ", "a" * 101, "line\nbreak"])
+def test_custom_subprogram_rejects_unusable_text(tmp_path, text):
+    config = load_config(write(tmp_path, CUSTOM_YAML))
+    with pytest.raises(ConfigError):
+        config.programs["trainboard"].resolve_command(text)
+
+
+def test_custom_subprogram_must_be_boolean(tmp_path):
+    with pytest.raises(ConfigError, match="custom_subprogram"):
+        load_config(write(tmp_path, CUSTOM_YAML.replace("custom_subprogram: true",
+                                                        "custom_subprogram: yes please")))
+
+
+def test_custom_subprogram_needs_placeholder(tmp_path):
+    text = VALID_YAML.replace(
+        "    command: python3 weather.py\n",
+        "    command: python3 weather.py\n    custom_subprogram: true\n",
+    )
+    with pytest.raises(ConfigError, match="placeholder"):
+        load_config(write(tmp_path, text))
+
+
+def test_custom_option_name_is_reserved(tmp_path):
+    text = VALID_YAML.replace("        name: Berlin Hbf", "        name: Custom")
+    with pytest.raises(ConfigError, match="reserved"):
+        load_config(write(tmp_path, text))

@@ -63,6 +63,7 @@ def test_publish_discovery_covers_all_expected_entities():
         "homeassistant/sensor/led_display_controller/last_error/config",
         "homeassistant/select/led_display_controller/program/config",
         "homeassistant/select/led_display_controller/subprogram/config",
+        "homeassistant/text/led_display_controller/custom_subprogram/config",
         "homeassistant/button/led_display_controller/power_on/config",
         "homeassistant/button/led_display_controller/start_program/config",
         "homeassistant/button/led_display_controller/stop/config",
@@ -102,8 +103,10 @@ def test_start_button_reads_both_selects():
     mqtt, client = build_interface()
     mqtt.publish_discovery(make_config())
     start = next(m for m in discovery_messages(client) if "start_program" in m[0])[1]
-    assert "select.led_display_program" in start["command_template"]
-    assert "select.led_display_subprogram" in start["command_template"]
+    # Entity ids as Home Assistant derives them from the device and entity names.
+    assert "select.led_display_controller_program" in start["command_template"]
+    assert "select.led_display_controller_subprogram" in start["command_template"]
+    assert "text.led_display_controller_custom_subprogram" in start["command_template"]
 
 
 def test_program_and_subprogram_selects_have_explicit_object_id():
@@ -175,3 +178,46 @@ def test_unrecognized_pending_program_value_narrows_to_just_none():
 
     client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "unknown"))
     assert _latest_subprogram_select(client)["options"] == ["none"]
+
+
+def custom_config():
+    from dataclasses import replace
+
+    config = make_config()
+    programs = dict(config.programs)
+    programs["trainboard"] = replace(programs["trainboard"], custom_subprogram=True)
+    return replace(config, programs=programs)
+
+
+def subprogram_options(client):
+    configs = [m[1] for m in discovery_messages(client) if "select/led_display_controller/subprogram" in m[0]]
+    return configs[-1]["options"]
+
+
+def test_custom_text_entity_is_retained_and_bounded():
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(custom_config())
+    text = next(m for m in discovery_messages(client) if m[0].startswith("homeassistant/text/"))[1]
+    assert text["command_topic"] == text["state_topic"] == "display/pending/custom_subprogram"
+    assert text["retain"] is True
+    assert text["max"] == 100
+
+
+def test_custom_option_offered_only_with_a_custom_program():
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(make_config())
+    assert "Custom" not in subprogram_options(client)
+
+    mqtt, client = build_interface()
+    mqtt.publish_discovery(custom_config())
+    assert "Custom" in subprogram_options(client)
+
+
+def test_narrowed_subprogram_select_keeps_custom_option_for_custom_program():
+    mqtt, client = build_interface()
+    mqtt.start("localhost", 1883)
+    mqtt.publish_discovery(custom_config())
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "Train Board"))
+    assert subprogram_options(client) == ["none", "Berlin Hbf", "Custom"]
+    client.on_message(client, None, FakeMQTTMessage(TOPIC_PENDING_PROGRAM, "OK"))
+    assert subprogram_options(client) == ["none"]

@@ -95,7 +95,11 @@ class TransitionManager:
         # display/current is consistent regardless of whether the caller sent an id
         # or a display name.
         resolved_subprogram = program.resolve_subprogram(subprogram_id)
-        self.active_subprogram_id = resolved_subprogram.id if resolved_subprogram else None
+        if resolved_subprogram is not None:
+            self.active_subprogram_id = resolved_subprogram.id
+        else:
+            # Free text (custom_subprogram), or None for programs without any.
+            self.active_subprogram_id = program.custom_value(subprogram_id)
 
     # -- sequences ---------------------------------------------------------
 
